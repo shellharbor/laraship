@@ -49,7 +49,7 @@ jobs:
             filament: "0"
             laravel: ""
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install bats and free ports 80/443
         run: |
