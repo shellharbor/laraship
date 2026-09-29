@@ -1,0 +1,30 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Статика и валидация аргументов (bats)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Установить bats
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bats
+
+      # Валидации нужен root: check_root выполняется раньше разбора аргументов.
+      # Скрипт отказывает до любых изменений, но создаёт пустой /var/www.
+      - name: bats (static + validation)
+        run: sudo bats --print-output-on-failure tests/static.bats tests/validation.bats

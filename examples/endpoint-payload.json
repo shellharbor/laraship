@@ -1,0 +1,33 @@
+{
+  "slug": "app",
+  "domain": "app.example.com",
+  "app_type": "laravel",
+  "laravel_version": "13.0",
+  "db_type": "postgres",
+  "ports": {
+    "http": 8231,
+    "https": 4175,
+    "php": 9342,
+    "redis": 6621
+  },
+  "redis": {
+    "password": "ChangeMe_Redis1"
+  },
+  "database": {
+    "type": "postgres",
+    "port": 5634,
+    "name": "exampledbname01",
+    "user": "exampledbuser01",
+    "password": "ChangeMe_DbPwd1"
+  },
+  "basic_auth": {
+    "enabled": true,
+    "user": "exampleauthuser",
+    "password": "ChangeMe_Auth01"
+  },
+  "ssl": {
+    "enabled": true,
+    "email": "admin@example.com"
+  },
+  "project_path": "/var/www/app"
+}

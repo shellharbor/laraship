@@ -1,0 +1,47 @@
+name: Lint
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shell:
+    name: ShellCheck, синтаксис, CRLF
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: bash -n
+        run: |
+          for f in *.sh tests/*.sh; do
+            echo "bash -n $f"
+            bash -n "$f"
+          done
+
+      - name: Нет CRLF в скриптах, шаблонах и тестах
+        run: |
+          if grep -rlI $'\r' -- *.sh laravel nginxproxy tests .github; then
+            echo "::error::Найдены файлы с CRLF (нужен LF)"
+            exit 1
+          fi
+
+      - name: ShellCheck
+        # SC2155 (declare and assign separately) — стилистика в remove.sh, известна.
+        run: shellcheck -S warning -e SC2155 -- *.sh tests/*.sh
+
+  workflows:
+    name: actionlint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest -color

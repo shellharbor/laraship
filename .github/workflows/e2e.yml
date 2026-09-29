@@ -1,0 +1,80 @@
+name: E2E
+
+# Реальное развёртывание Laravel (+ Filament) на чистом раннере и проверка, что сайт
+# соответствует переданным аргументам, затем deactivate/activate/remove.
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "*.sh"
+      - "laravel/**"
+      - "nginxproxy/**"
+      - "tests/**"
+      - ".github/workflows/e2e.yml"
+  pull_request:
+    paths:
+      - "*.sh"
+      - "laravel/**"
+      - "nginxproxy/**"
+      - "tests/**"
+      - ".github/workflows/e2e.yml"
+  schedule:
+    - cron: "0 5 * * 1" # по понедельникам: ловим поломки из-за обновлений composer/образов
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: PostgreSQL + Filament (Laravel 12)
+            id: postgres-filament
+            db: postgres
+            filament: "1"
+            laravel: "12.0"
+          - name: MySQL, версия Laravel по умолчанию
+            id: mysql-default
+            db: mysql
+            filament: "0"
+            laravel: ""
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Установить bats и освободить порты 80/443
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bats
+          sudo systemctl stop apache2 nginx 2>/dev/null || true
+          sudo ss -tlnp | grep -E ':(80|443) ' && { echo "::error::порты 80/443 заняты"; exit 1; } || true
+
+      - name: bats e2e
+        env:
+          E2E_ALLOW: "1"
+          E2E_DB: ${{ matrix.db }}
+          E2E_FILAMENT: ${{ matrix.filament }}
+          E2E_LARAVEL: ${{ matrix.laravel }}
+          # Запрос сертификата без DNS проверяем только по расписанию и вручную,
+          # чтобы не упираться в лимиты Let's Encrypt на каждый PR.
+          E2E_SSL: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && matrix.db == 'mysql' && '1' || '0' }}
+          E2E_KEEP_LOG: ${{ runner.temp }}/deploy-${{ matrix.id }}.log
+        run: sudo -E bats --print-output-on-failure tests/e2e.bats
+
+      - name: Загрузить лог развёртывания
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-log-${{ matrix.id }}
+          path: ${{ runner.temp }}/deploy-${{ matrix.id }}.log
+          if-no-files-found: ignore
+          retention-days: 14

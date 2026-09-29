@@ -1,0 +1,282 @@
+services:
+  php:
+    build:
+      context: ./.docker/php
+      dockerfile: php83.Dockerfile
+    container_name: {SLUG}_php
+    restart: always
+    ports:
+      # Только localhost: nginx ходит к PHP по внутренней сети, открытый наружу FastCGI = выполнение кода
+      - "127.0.0.1:${PHP_PORT}:9000"
+    volumes:
+      - ./public_html:/var/www/html
+      # docker cp {SLUG}_php:/usr/local/etc/php/php.ini-production /var/www/{SLUG}/.config/php/php.ini
+      #- ./.config/php/php.ini:/usr/local/etc/php/php.ini:ro
+    networks:
+      - {SLUG}
+  nginx:
+    build:
+      context: ./.docker/nginx
+      dockerfile: nginx-1.29.1.Dockerfile
+    # Раз в 6 часов перечитываем конфиг, чтобы подхватить сертификаты, продлённые certbot_renew
+    command: /bin/sh -c 'while :; do sleep 21600 & wait $${!}; nginx -s reload; done & exec nginx -g "daemon off;"'
+    container_name: {SLUG}_nginx
+    restart: always
+    working_dir: /var/www/html
+    depends_on:
+      - php
+      - db
+    volumes:
+      - ./.config/nginx/_site.conf:/etc/nginx/conf.d/default.conf:ro
+      #- ../nginxproxy/dhparam.pem:/etc/ssl/certs/dhparam.pem
+      # cd /var/www/{SLUG}/.config/nginx && docker run --rm httpd:alpine htpasswd -nb USERNAME PASSWORD > .htpasswd
+      #- ./.config/nginx/.htpasswd:/etc/nginx/.htpasswd:ro
+      - ./public_html:/var/www/html
+      - {SLUG}_ssl_certificates:/etc/letsencrypt:ro
+      - {SLUG}_certbot_www:/var/www/certbot
+    ports:
+      - "${SITE_PORT_HTTP}:80"
+      - "${SITE_PORT_HTTPS}:443"
+    networks:
+      - {SLUG}
+  db_postgres:
+    image: elestio/postgres:17
+    container_name: {SLUG}_db_postgres
+    restart: always
+    volumes:
+      # cd /var/www/{SLUG} && docker cp {SLUG}_db:/var/lib/postgresql/data/pg_hba.conf /var/www/{SLUG}/.config/postgres/pg_hba.conf.original
+      # cd /var/www/{SLUG} && docker cp {SLUG}_db:/var/lib/postgresql/data/pg_hba.conf /var/www/{SLUG}/.config/postgres/pg_hba.conf
+      #- ./.config/postgres/pg_hba.conf:/var/lib/postgresql/data/pg_hba.conf
+
+      # cd /var/www/{SLUG} && docker cp {SLUG}_db:/var/lib/postgresql/data/postgresql.conf /var/www/{SLUG}/.config/postgres/postgresql.conf.original
+      # cd /var/www/{SLUG} && docker cp {SLUG}_db:/var/lib/postgresql/data/postgresql.conf /var/www/{SLUG}/.config/postgres/postgresql.conf
+      #- ./.config/postgres/postgresql.conf:/var/lib/postgresql/data/postgresql.conf
+
+      - {SLUG}_db_postgres:/var/lib/postgresql/data
+      # Init scripts run only on first database initialization
+      - ./.docker/init/postgres:/docker-entrypoint-initdb.d:ro
+    environment:
+      POSTGRES_USER: ${DB_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${DB_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${DB_POSTGRES_NAME}
+      PGDATA: /var/lib/postgresql/data
+    ports:
+      - "${DB_PORT}:5432"
+    networks:
+      - {SLUG}
+  db_mysql:
+    image: elestio/mysql:8.0
+    container_name: {SLUG}_db_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_USER: ${DB_MYSQL_USER}
+      MYSQL_ROOT_PASSWORD: ${DB_MYSQL_PASSWORD_ROOT}
+      MYSQL_PASSWORD: ${DB_MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${DB_MYSQL_NAME}
+    ports:
+      - ${DB_PORT}:3306
+    volumes:
+      - {SLUG}_db_mysql:/var/lib/mysql
+      # cd /var/www/{SLUG} && && docker compose cp db:/etc/my.cnf /data/www/{SLUG}/.config/mysql/my.cnf
+      #- ./.config/mysql/my.cnf:/etc/my.cnf:ro
+    networks:
+      - {SLUG}
+  # cd /var/www/{SLUG} && docker compose run --rm permissions
+  permissions:
+    image: busybox
+    container_name: {SLUG}_permissions
+    volumes:
+      - ./public_html:/var/www/html
+    command: |
+      chown -R 1000:1000 /var/www/html && \
+      find /var/www/html -type f -exec chmod 644 {} \; && \
+      find /var/www/html -type d -exec chmod 755 {} \; && \
+      chmod -R 0775 /var/www/html/storage && \
+      chmod -R 0775 /var/www/html/bootstrap/cache
+    networks:
+      - {SLUG}
+  # curl http://{SLUG}/.well-known/acme-challenge
+  # run
+  # cd /var/www/{SLUG} && docker compose run --rm certbot certonly --webroot -w /var/www/certbot -d {SLUG}.apptu.dev --email sovletig@gmail.com --agree-tos --non-interactive
+
+  # list existing certificates
+  # cd /var/www/{SLUG} && docker compose run --rm certbot certificates
+
+  # renew ALL certificates
+  # cd /var/www/{SLUG} && docker compose run --rm certbot renew --dry-run
+
+  # renew specific certificate
+  # cd /var/www/{SLUG} && docker compose run --rm certbot renew --cert-name {SLUG}.apptu.dev
+
+  # delete certificate
+  # cd /var/www/{SLUG} && docker compose run --rm certbot delete --cert-name {SLUG}.apptu.dev
+  certbot:
+    image: certbot/certbot:latest
+    container_name: {SLUG}_certbot
+    profiles:
+      - manual
+    volumes:
+      - {SLUG}_ssl_certificates:/etc/letsencrypt
+      - {SLUG}_certbot_www:/var/www/certbot
+    networks:
+      - {SLUG}
+  certbot_renew:
+    image: certbot/certbot:latest
+    container_name: {SLUG}_certbot_renew
+    restart: unless-stopped
+    volumes:
+      - {SLUG}_ssl_certificates:/etc/letsencrypt
+      - {SLUG}_certbot_www:/var/www/certbot
+      - /var/log/letsencrypt:/var/log/letsencrypt
+    # entrypoint, а не command: у образа certbot entrypoint = certbot, и command превращался в "certbot sh -c ...".
+    # Новый сертификат nginx подхватывает сам (периодический reload в сервисе nginx)
+    entrypoint: >
+      sh -c "while true; do
+        echo 'Checking for certificate renewal...'
+        if certbot renew --webroot -w /var/www/certbot --quiet --no-self-upgrade; then
+          echo 'Certificate renewal check completed successfully'
+        else
+          echo 'Certificate renewal failed'
+        fi
+        echo 'Sleeping for 12 hours...'
+        sleep 43200
+      done"
+    depends_on:
+      - nginx
+    networks:
+      - {SLUG}
+  # cd /var/www/{SLUG} && docker compose run --rm artisan tinker
+  # cd /var/www/{SLUG} && docker compose run --rm artisan route:cache
+  # cd /var/www/{SLUG} && docker compose run --rm artisan route:list
+  # cd /var/www/{SLUG} && docker compose run --rm artisan config:cache
+  # cd /var/www/{SLUG} && docker compose run --rm artisan view:clear
+  # cd /var/www/{SLUG} && docker compose run --rm artisan cache:clear
+  # cd /var/www/{SLUG} && docker compose run --rm artisan migrate
+  # cd /var/www/{SLUG} && docker compose run --rm artisan migrate:refresh
+  # cd /var/www/{SLUG} && docker compose run --rm artisan migrate:refresh --seed
+  # cd /var/www/{SLUG} && docker compose run --rm artisan db:seed
+  # cd /var/www/{SLUG} && docker compose run --rm artisan db:seed --class=Database\Seeders\UsersTableSeeder
+  # cd /var/www/{SLUG} && docker compose run --rm artisan storage:link
+  # cd /var/www/{SLUG} && docker compose run --rm artisan make:controller DebugController
+  # cd /var/www/{SLUG} && docker compose run --rm artisan make:model Flight
+  # cd /var/www/{SLUG} && docker compose run --rm artisan make:model Flight --migration
+
+  # cd /var/www/{SLUG} && docker compose run --rm artisan filament:install --panels
+  # cd /var/www/{SLUG} && docker compose run --rm artisan make:filament-user
+  # cd /var/www/{SLUG} && docker compose run --rm artisan make:filament-resource Customer --generate
+  # cd /var/www/{SLUG} && docker compose run --rm artisan make:filament-relation-manager CategoryResource posts title
+
+  # cd /var/www/{SLUG} && docker compose run --rm artisan vendor:publish --tag=filament-config
+  # cd /var/www/{SLUG} && docker compose run --rm artisan vendor:publish --tag=filament-panels-translations
+  # cd /var/www/{SLUG} && docker compose run --rm artisan vendor:publish --tag=filament-actions-translations
+  # cd /var/www/{SLUG} && docker compose run --rm artisan vendor:publish --tag=filament-forms-translations
+  # cd /var/www/{SLUG} && docker compose run --rm artisan vendor:publish --tag=filament-infolists-translations
+  # cd /var/www/{SLUG} && docker compose run --rm artisan vendor:publish --tag=filament-notifications-translations
+  # cd /var/www/{SLUG} && docker compose run --rm artisan vendor:publish --tag=filament-tables-translations
+  # cd /var/www/{SLUG} && docker compose run --rm artisan vendor:publish --tag=filament-translations
+  artisan:
+    build:
+      context: ./.docker/php
+      dockerfile: php83.Dockerfile
+    container_name: {SLUG}_artisan
+    volumes:
+      - ./public_html:/var/www/html
+    depends_on:
+      - php
+    working_dir: /var/www/html
+    entrypoint: [ 'php', '/var/www/html/artisan' ]
+    networks:
+      - {SLUG}
+  # cd /var/www/{SLUG} && docker compose run --rm composer install
+  # cd /var/www/{SLUG} && docker compose run --rm composer update
+  # cd /var/www/{SLUG} && docker compose run --rm composer dump-autoload
+  # cd /var/www/{SLUG} && docker compose run --rm composer create-project laravel/laravel:^12.0 .
+  # cd /var/www/{SLUG} && docker compose run --rm composer require filament/filament:"^4.0"
+
+  # cd /var/www/{SLUG} && docker compose run --rm artisan filament:install --panels
+  # cd /var/www/{SLUG} && docker compose run --rm artisan make:filament-user
+
+  # cd /var/www/{SLUG} && docker compose run --rm composer remove tigusigalpa/monica-ai-php
+  # Composer запускается в том же PHP-образе, что и приложение: зависимости подбираются
+  # под реальную версию PHP и расширения (composer:latest с --ignore-platform-reqs ставил
+  # пакеты под более новый PHP, и приложение падало с syntax error)
+  composer:
+    build:
+      context: ./.docker/php
+      dockerfile: php83.Dockerfile
+    container_name: {SLUG}_composer
+    working_dir: /var/www/html
+    entrypoint: [ 'composer' ]
+    environment:
+      - COMPOSER_CACHE_DIR=/tmp/composer-cache
+      - COMPOSER_PROCESS_TIMEOUT=1000
+      - COMPOSER_MEMORY_LIMIT=-1
+    depends_on:
+      - php
+    volumes:
+      - ./public_html:/var/www/html
+    networks:
+      - {SLUG}
+  # docker compose run --rm npm install
+  npm:
+    image: node:current-alpine
+    container_name: {SLUG}_npm
+    working_dir: /var/www/html
+    entrypoint: [ "npm" ]
+    depends_on:
+      - php
+    volumes:
+      - ./public_html:/var/www/html
+    networks:
+      - {SLUG}
+  redis:
+    image: redis:7-alpine
+    container_name: {SLUG}_redis
+    restart: always
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - "${REDIS_PASSWORD}"
+    volumes:
+      - {SLUG}_redis_data:/data
+    ports:
+      - "${REDIS_PORT}:6379"
+    networks:
+      - {SLUG}
+  # Laravel cron scheduler
+  # cd /var/www/{SLUG} && docker compose run --rm cron
+  cron:
+    build:
+      context: ./.docker/php
+      dockerfile: php83.Dockerfile
+    container_name: {SLUG}_cron
+    restart: always
+    volumes:
+      - ./public_html:/var/www/html
+    depends_on:
+      - php
+    working_dir: /var/www/html
+    command: >
+      sh -c "while true; do
+        php artisan schedule:run --verbose --no-interaction
+        sleep 600
+      done"
+    networks:
+      - {SLUG}
+networks:
+  {SLUG}:
+    name: {SLUG}
+    driver: bridge
+volumes:
+  {SLUG}_db_postgres:
+    name: {SLUG}_db_postgres
+  {SLUG}_db_mysql:
+    name: {SLUG}_db_mysql
+  {SLUG}_ssl_certificates:
+    name: {SLUG}_ssl_certificates
+  {SLUG}_certbot_www:
+    name: {SLUG}_certbot_www
+  {SLUG}_redis_data:
+    name: {SLUG}_redis_data
