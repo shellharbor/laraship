@@ -18,7 +18,7 @@ jobs:
     name: ShellCheck, syntax, CRLF
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: bash -n
         run: |
@@ -42,6 +42,6 @@ jobs:
     name: actionlint
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: actionlint
         run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest -color
