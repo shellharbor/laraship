@@ -1,5 +1,5 @@
-# Песочница для тестов laravel-deploy: Ubuntu 24.04 со своим Docker-демоном (dind).
-# Запускается только с --privileged (см. tests/run-local.sh). Docker хоста скрипт не трогает.
+# Sandbox for the laravel-deploy tests: Ubuntu 24.04 with its own Docker daemon (dind).
+# Runs only with --privileged (see tests/run-local.sh). The host's Docker is not touched.
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive

@@ -2,30 +2,30 @@
 set -euo pipefail
 
 # ============================================================
-# 03-explicit-db-credentials-and-ports.sh — явные учётные данные БД и порты
+# 03-explicit-db-credentials-and-ports.sh — explicit DB credentials and ports
 # ============================================================
-# Сценарий:
-#   Нужны предсказуемые имя БД, пользователь, пароли и порты хоста,
-#   например для внешнего мониторинга или SSH-туннеля к БД.
+# Scenario:
+#   You need a predictable DB name, user, passwords and host ports,
+#   for example for external monitoring or an SSH tunnel to the DB.
 #
-# Что получится:
-#   - БД PostgreSQL crm_db с пользователем crm_user и заданным паролем;
-#   - порты хоста: HTTP 8150, HTTPS 4150, PHP-FPM 9150 (только 127.0.0.1),
-#     Redis 6550, PostgreSQL 5550. Явно заданные порты скрипт НЕ проверяет
-#     на занятость;
-#   - Laravel подключается к crm_db:5432 (внутренний порт), а с хоста БД
-#     доступна на 127.0.0.1:5550.
+# Result:
+#   - a PostgreSQL database crm_db with the user crm_user and the given password;
+#   - host ports: HTTP 8150, HTTPS 4150, PHP-FPM 9150 (127.0.0.1 only),
+#     Redis 6550, PostgreSQL 5550. The script does NOT check explicitly given
+#     ports for being in use;
+#   - Laravel connects to crm_db:5432 (internal port), while from the host the DB
+#     is available on 127.0.0.1:5550.
 #
-# Перед запуском поменяйте:
-#   - slug, домен и email;
-#   - все пароли ChangeMe_* на свои. Используйте только символы
-#     A-Za-z0-9@%_+-: значения пишутся в .env без кавычек;
-#   - порты, если они уже заняты (sudo ss -tlnp).
+# Before running, change:
+#   - the slug, domain and email;
+#   - all ChangeMe_* passwords to your own. Use only the characters
+#     A-Za-z0-9@%_+-: values are written to .env without quotes;
+#   - the ports, if they are already taken (sudo ss -tlnp).
 #
-# Запуск на сервере (из любой папки):
+# Run on the server (from any folder):
 #   bash /opt/laravel-deploy/examples/03-explicit-db-credentials-and-ports.sh
-# DEPLOY_DIR по умолчанию — папка laravel-deploy, в которой лежит этот пример
-# (deploy-laravel.sh, laravel/, nginxproxy/). Переопределение:
+# DEPLOY_DIR defaults to the laravel-deploy folder that contains this example
+# (deploy-laravel.sh, laravel/, nginxproxy/). To override:
 #   DEPLOY_DIR=/srv/laravel-deploy bash 03-explicit-db-credentials-and-ports.sh
 # ============================================================
 

@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   shell:
-    name: ShellCheck, синтаксис, CRLF
+    name: ShellCheck, syntax, CRLF
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -27,15 +27,15 @@ jobs:
             bash -n "$f"
           done
 
-      - name: Нет CRLF в скриптах, шаблонах и тестах
+      - name: No CRLF in scripts, templates and tests
         run: |
           if grep -rlI $'\r' -- *.sh laravel nginxproxy tests .github; then
-            echo "::error::Найдены файлы с CRLF (нужен LF)"
+            echo "::error::Files with CRLF found (LF is required)"
             exit 1
           fi
 
       - name: ShellCheck
-        # SC2155 (declare and assign separately) — стилистика в remove.sh, известна.
+        # SC2155 (declare and assign separately) is a style issue in remove.sh: known.
         run: shellcheck -S warning -e SC2155 -- *.sh tests/*.sh
 
   workflows:

@@ -2,27 +2,27 @@
 set -euo pipefail
 
 # ============================================================
-# 02-mysql-explicit-slug.sh — MySQL в контейнере, явный slug
+# 02-mysql-explicit-slug.sh — MySQL in a container, explicit slug
 # ============================================================
-# Сценарий:
-#   Обычный сайт с MySQL и заранее известными slug и доменом.
-#   Учётные данные БД, пароль Redis и порты генерируются автоматически.
+# Scenario:
+#   A regular site with MySQL and a known slug and domain.
+#   The DB credentials, Redis password and ports are generated automatically.
 #
-# Что получится:
-#   - проект /var/www/shop, домен shop.example.com (при явном --slug
-#     домен не меняется);
-#   - MySQL 8.0 в контейнере shop_db; в .env Laravel записаны
-#     DB_HOST=shop_db и DB_PORT=3306;
-#   - HTTPS-сертификат Let's Encrypt.
+# Result:
+#   - project /var/www/shop, domain shop.example.com (with an explicit --slug
+#     the domain is not changed);
+#   - MySQL 8.0 in the shop_db container; Laravel's .env gets
+#     DB_HOST=shop_db and DB_PORT=3306;
+#   - an HTTPS certificate from Let's Encrypt.
 #
-# Перед запуском поменяйте:
-#   - slug shop и домен shop.example.com (A-запись должна указывать на сервер);
-#   - admin@example.com на реальный email.
+# Before running, change:
+#   - the slug shop and the domain shop.example.com (the A record must point to the server);
+#   - admin@example.com to a real email.
 #
-# Запуск на сервере (из любой папки):
+# Run on the server (from any folder):
 #   bash /opt/laravel-deploy/examples/02-mysql-explicit-slug.sh
-# DEPLOY_DIR по умолчанию — папка laravel-deploy, в которой лежит этот пример
-# (deploy-laravel.sh, laravel/, nginxproxy/). Переопределение:
+# DEPLOY_DIR defaults to the laravel-deploy folder that contains this example
+# (deploy-laravel.sh, laravel/, nginxproxy/). To override:
 #   DEPLOY_DIR=/srv/laravel-deploy bash 02-mysql-explicit-slug.sh
 # ============================================================
 

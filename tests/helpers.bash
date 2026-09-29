@@ -1,34 +1,34 @@
-# Общие хелперы для bats-тестов laravel-deploy.
+# Shared helpers for the laravel-deploy bats tests.
 # shellcheck shell=bash
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
 DEPLOY="${REPO_ROOT}/deploy-laravel.sh"
 SCRIPTS=(deploy-laravel.sh activate.sh deactivate.sh remove.sh list-projects.sh)
 
-# Вывод скрипта без ANSI-цветов.
+# Script output without ANSI colours.
 strip_ansi() { sed 's/\x1b\[[0-9;]*m//g'; }
 
 require_root() {
-    [ "$(id -u)" -eq 0 ] || skip "нужен root (тесты запускаются через sudo или в песочнице)"
+    [ "$(id -u)" -eq 0 ] || skip "root is required (run the tests through sudo or in the sandbox)"
 }
 
-# Запуск deploy-laravel.sh с жёстким таймаутом: если валидация вдруг пропустит
-# неверные аргументы, скрипт не должен уйти в реальное развёртывание.
+# Run deploy-laravel.sh with a hard timeout: if validation ever lets bad
+# arguments through, the script must not go on to a real deployment.
 run_deploy() {
     run timeout 30 bash "${DEPLOY}" "$@"
     output="$(printf '%s' "${output}" | strip_ansi)"
 }
 
-# Ожидаем отказ на этапе валидации: код 1 и сообщение об ошибке.
+# Expect a rejection at the validation stage: exit code 1 and an error message.
 assert_rejected() {
     local expected="$1"
     [ "${status}" -eq 1 ] || {
-        echo "ожидался exit=1, получен ${status}" >&2
+        echo "expected exit=1, got ${status}" >&2
         echo "${output}" >&2
         return 1
     }
     [[ "${output}" == *"${expected}"* ]] || {
-        echo "в выводе нет «${expected}»" >&2
+        echo "output does not contain \"${expected}\"" >&2
         echo "${output}" >&2
         return 1
     }

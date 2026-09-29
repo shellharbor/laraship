@@ -1,18 +1,20 @@
 #!/usr/bin/env bats
-# End-to-end: реальное развёртывание deploy-laravel.sh и проверка, что созданный
-# сайт соответствует переданным аргументам. Затем жизненный цикл проекта.
+# End-to-end: a real deploy-laravel.sh deployment, checking that the created site
+# matches the arguments passed, followed by the project lifecycle.
 #
-# ВНИМАНИЕ: тест пишет в /var/www, занимает порты 80/443 и создаёт Docker-ресурсы.
-# Запускайте только в одноразовой среде (CI-раннер или tests/run-local.sh) и
-# только с E2E_ALLOW=1. Тесты идут по порядку и зависят друг от друга.
+# WARNING: the test writes to /var/www, takes ports 80/443 and creates Docker
+# resources. Run it only in a disposable environment (a CI runner or
+# tests/run-local.sh) and only with E2E_ALLOW=1. The tests run in order and
+# depend on each other.
 #
-# Параметры (переменные окружения):
-#   E2E_ALLOW=1             обязательно, защита от запуска на «живом» сервере
-#   E2E_DB=postgres|mysql   тип БД (по умолчанию postgres)
-#   E2E_FILAMENT=1|0        ставить Filament (по умолчанию 1)
-#   E2E_LARAVEL=X.Y         версия Laravel; пусто = значение по умолчанию скрипта
-#   E2E_SSL=1|0             запросить сертификат вместо --no-ssl (без DNS он не
-#                           выдастся: проверяется, что скрипт только предупреждает)
+# Parameters (environment variables):
+#   E2E_ALLOW=1             required, a guard against running on a live server
+#   E2E_DB=postgres|mysql   database type (default: postgres)
+#   E2E_FILAMENT=1|0        install Filament (default: 1)
+#   E2E_LARAVEL=X.Y         Laravel version; empty = the script's default
+#   E2E_SSL=1|0             request a certificate instead of --no-ssl (without DNS
+#                           it will not be issued: the test checks that the
+#                           script only warns)
 
 load helpers
 
@@ -29,15 +31,15 @@ REDIS_PASS="Rpass_123" DB_NAME="e2edb" DB_USER="e2euser" DB_PASS="Dbpass_123"
 FIL_EMAIL="admin@example.test" FIL_NAME="E2EAdmin" FIL_PASS="Passw0rd_123"
 AUTH_USER="e2euser" AUTH_PASS="Tpass_123"
 
-# ---------- хелперы ----------
+# ---------- helpers ----------
 
 env_val() { grep -E "^$2=" "$1" | head -n1 | cut -d= -f2-; }
 
-# docker compose проекта без TTY.
+# The project's docker compose, without a TTY.
 dc() { docker compose --project-directory "${PROJECT}" -f "${PROJECT}/docker-compose.yml" "$@"; }
 art() { dc run --rm -T artisan "$@"; }
 
-# Повторять команду до успеха (до N секунд).
+# Retry a command until it succeeds (up to N seconds).
 eventually() {
     local timeout="$1"; shift
     local i
@@ -50,11 +52,11 @@ eventually() {
 
 container_up() { [ "$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null)" = "true" ]; }
 
-# ---------- подготовка ----------
+# ---------- setup ----------
 
 setup_file() {
-    [ "${E2E_ALLOW:-}" = "1" ] || skip "e2e пишет в /var/www и занимает 80/443: запускайте с E2E_ALLOW=1 в одноразовой среде"
-    [ "$(id -u)" -eq 0 ] || skip "нужен root"
+    [ "${E2E_ALLOW:-}" = "1" ] || skip "e2e writes to /var/www and takes ports 80/443: run with E2E_ALLOW=1 in a disposable environment"
+    [ "$(id -u)" -eq 0 ] || skip "root is required"
 
     local ssl_args=(--no-ssl)
     [ "${E2E_SSL}" = "1" ] && ssl_args=(--ssl-email admin@example.test)
@@ -89,7 +91,7 @@ setup_file() {
 }
 
 teardown_file() {
-    # Страховка: убираем проект, даже если lifecycle-тесты упали раньше времени.
+    # Safety net: remove the project even if the lifecycle tests failed early.
     if [ -d "${PROJECT}" ]; then
         (cd "${PROJECT}" && docker compose down -v --remove-orphans >/dev/null 2>&1) || true
         rm -rf "${PROJECT}"
@@ -100,34 +102,34 @@ teardown_file() {
     fi
 }
 
-# ---------- результат работы скрипта ----------
+# ---------- what the script produced ----------
 
-@test "скрипт завершился с кодом 0 и напечатал итоги" {
+@test "the script exited with code 0 and printed the summary" {
     [ "$(cat "${BATS_FILE_TMPDIR}/deploy.exit")" = "0" ] || {
         tail -n 40 "${DEPLOY_LOG}" | strip_ansi >&2
         return 1
     }
-    strip_ansi <"${DEPLOY_LOG}" | grep -q "Развёртывание завершено"
+    strip_ansi <"${DEPLOY_LOG}" | grep -q "Deployment completed"
 }
 
-@test "в логе нет ERROR-сообщений" {
+@test "the log contains no ERROR messages" {
     if strip_ansi <"${DEPLOY_LOG}" | grep -qE '^\[ERROR\]'; then return 1; fi
 }
 
-@test "контейнеры проекта запущены" {
+@test "project containers are running" {
     for c in php nginx redis cron certbot_renew; do
-        container_up "${SLUG}_${c}" || { echo "не запущен ${SLUG}_${c}" >&2; return 1; }
+        container_up "${SLUG}_${c}" || { echo "${SLUG}_${c} is not running" >&2; return 1; }
     done
     container_up "${SLUG}_db"
 }
 
-@test "общий nginxproxy запущен на 80/443" {
+@test "the shared nginxproxy is running on 80/443" {
     container_up nginxproxy
     [ -f "/var/www/nginxproxy/sites/${SLUG}.conf" ]
     grep -q "server_name ${DOMAIN};" "/var/www/nginxproxy/sites/${SLUG}.conf"
 }
 
-@test "порты соответствуют аргументам" {
+@test "ports match the arguments" {
     docker port "${SLUG}_nginx" 80 | grep -q ":${PORT_HTTP}$"
     docker port "${SLUG}_nginx" 443 | grep -q ":${PORT_HTTPS}$"
     docker port "${SLUG}_php" 9000 | grep -q "127.0.0.1:${PORT_PHP}$"
@@ -137,7 +139,7 @@ teardown_file() {
     docker port "${SLUG}_db" "${db_inner}" | grep -q ":${PORT_DB}$"
 }
 
-@test ".env проекта соответствует аргументам" {
+@test "the project .env matches the arguments" {
     local f="${PROJECT}/.env"
     [ "$(env_val "$f" SITE_HOST)" = "${DOMAIN}" ]
     [ "$(env_val "$f" SITE_PORT_HTTP)" = "${PORT_HTTP}" ]
@@ -156,7 +158,7 @@ teardown_file() {
     fi
 }
 
-@test ".env Laravel: драйвер, хост БД и APP_URL" {
+@test "Laravel .env: driver, DB host and APP_URL" {
     local f="${PROJECT}/public_html/.env"
     local drv=pgsql
     [ "${E2E_DB}" = "mysql" ] && drv=mysql
@@ -168,7 +170,7 @@ teardown_file() {
     [ "$(env_val "$f" APP_URL)" = "https://${DOMAIN}" ]
 }
 
-@test "установлена запрошенная версия Laravel" {
+@test "the requested Laravel version is installed" {
     run art --version
     [ "${status}" -eq 0 ]
     if [ -n "${E2E_LARAVEL}" ]; then
@@ -178,7 +180,7 @@ teardown_file() {
     fi
 }
 
-@test "миграции выполнены, БД нужного типа" {
+@test "migrations ran, the database is of the right type" {
     run art migrate:status
     [ "${status}" -eq 0 ]
     [[ "${output}" == *"create_users_table"*"Ran"* ]]
@@ -187,12 +189,12 @@ teardown_file() {
     if [ "${E2E_DB}" = "postgres" ]; then [[ "${output}" == *pgsql* ]]; else [[ "${output}" == *mysql* ]]; fi
 }
 
-@test "Redis отвечает с заданным паролем" {
+@test "Redis answers with the given password" {
     run docker exec "${SLUG}_redis" redis-cli -a "${REDIS_PASS}" ping
     [[ "${output}" == *PONG* ]]
 }
 
-@test "Basic Auth: запись в .htpasswd корректна" {
+@test "Basic Auth: the .htpasswd entry is valid" {
     local line hash salt
     line="$(grep "^${AUTH_USER}:" "${PROJECT}/.config/nginx/.htpasswd")"
     [ -n "${line}" ]
@@ -201,15 +203,15 @@ teardown_file() {
     [ "$(openssl passwd -apr1 -salt "${salt}" "${AUTH_PASS}")" = "${hash}" ]
 }
 
-@test "Filament: пакет, админ и пароль соответствуют аргументам" {
-    [ "${E2E_FILAMENT}" = "1" ] || skip "Filament не запрашивался"
+@test "Filament: package, admin user and password match the arguments" {
+    [ "${E2E_FILAMENT}" = "1" ] || skip "Filament was not requested"
     grep -q '"filament/filament": "^5' "${PROJECT}/public_html/composer.json"
     [ "$(env_val "${PROJECT}/.env" FILAMENT_ADMIN_EMAIL)" = "${FIL_EMAIL}" ]
     run art tinker --execute="\$u = App\\Models\\User::where('email','${FIL_EMAIL}')->first(); echo \$u ? \$u->name.'|'.(Hash::check('${FIL_PASS}', \$u->password) ? 'PASS_OK' : 'PASS_BAD') : 'NO_USER';"
     [[ "${output}" == *"${FIL_NAME}|PASS_OK"* ]]
 }
 
-@test "приложение отвечает по HTTP (artisan serve внутри php-контейнера)" {
+@test "the application answers over HTTP (artisan serve inside the php container)" {
     docker exec -d -w /var/www/html "${SLUG}_php" php artisan serve --host=127.0.0.1 --port=8000 --no-reload
     code() { docker exec "${SLUG}_php" curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8000$1"; }
     http_is() { [ "$(code "$1")" = "$2" ]; }
@@ -220,34 +222,34 @@ teardown_file() {
     fi
 }
 
-@test "SSL: без DNS скрипт только предупреждает, при --no-ssl блок закомментирован" {
+@test "SSL: without DNS the script only warns; with --no-ssl the block stays commented out" {
     local log; log="$(strip_ansi <"${DEPLOY_LOG}")"
     if [ "${E2E_SSL}" = "1" ]; then
-        [[ "${log}" == *"Не удалось получить SSL-сертификат"* ]]
+        [[ "${log}" == *"Failed to obtain an SSL certificate"* ]]
     else
-        [[ "${log}" == *"Пропускаю получение SSL-сертификата"* ]]
+        [[ "${log}" == *"Skipping SSL certificate issuance"* ]]
     fi
-    # Без сертификата HTTPS-блок остаётся закомментированным, nginx не падает.
+    # Without a certificate the HTTPS block stays commented out and nginx keeps running.
     grep -qE '^#\s*listen 443' "${PROJECT}/.config/nginx/_site.conf"
     container_up "${SLUG}_nginx"
 }
 
-@test "backup: zip создан, содержит проект, путь записан в .env" {
+@test "backup: the zip exists, contains the project, and its path is stored in .env" {
     local zip; zip="$(env_val "${PROJECT}/.env" BACKUP_ARCHIVE_PATH)"
     [ -f "${zip}" ]
     run python3 -c "import sys,zipfile; n=zipfile.ZipFile(sys.argv[1]).namelist(); sys.exit(0 if any(x.endswith('public_html/artisan') for x in n) else 1)" "${zip}"
     [ "${status}" -eq 0 ]
 }
 
-# ---------- жизненный цикл ----------
+# ---------- lifecycle ----------
 
-@test "list-projects показывает проект" {
+@test "list-projects shows the project" {
     run bash "${REPO_ROOT}/list-projects.sh"
     [ "${status}" -eq 0 ]
     [[ "$(printf '%s' "${output}" | strip_ansi)" == *"${SLUG}"* ]]
 }
 
-@test "deactivate: контейнеры остановлены, конфиг прокси отключён" {
+@test "deactivate: containers are stopped, the proxy config is disabled" {
     run bash "${REPO_ROOT}/deactivate.sh" --slug "${SLUG}"
     [ "${status}" -eq 0 ]
     if container_up "${SLUG}_php"; then return 1; fi
@@ -256,7 +258,7 @@ teardown_file() {
     container_up nginxproxy
 }
 
-@test "activate: проект поднят, конфиг прокси возвращён" {
+@test "activate: the project is up, the proxy config is restored" {
     run bash "${REPO_ROOT}/activate.sh" --slug "${SLUG}"
     [ "${status}" -eq 0 ]
     eventually 60 container_up "${SLUG}_php"
@@ -265,7 +267,7 @@ teardown_file() {
     container_up nginxproxy
 }
 
-@test "remove: удаляет контейнеры, volumes, сеть, конфиг прокси и папку" {
+@test "remove: deletes containers, volumes, network, proxy config and folder" {
     run bash -c "echo yes | bash '${REPO_ROOT}/remove.sh' --slug '${SLUG}' --domain '${DOMAIN}'"
     [ "${status}" -eq 0 ]
     [ ! -d "${PROJECT}" ]

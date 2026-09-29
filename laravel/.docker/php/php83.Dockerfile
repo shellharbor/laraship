@@ -64,7 +64,7 @@ RUN apt update && apt install -y \
     libicu-dev \
     && apt clean && rm -rf /var/lib/apt/lists/*
 
-# Composer для сервиса composer в docker-compose.yml
+# Composer for the composer service in docker-compose.yml
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 RUN groupadd -g 1000 www \

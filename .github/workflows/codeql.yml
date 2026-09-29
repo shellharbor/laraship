@@ -1,7 +1,7 @@
 name: CodeQL
 
-# CodeQL не поддерживает Bash, поэтому анализируются сами workflow-файлы
-# (язык `actions`): небезопасные выражения, инъекции через контекст, лишние права.
+# CodeQL does not support Bash, so the workflow files themselves are analysed
+# (language `actions`): unsafe expressions, context injection, excessive permissions.
 on:
   push:
     branches: [main, master]
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   analyze:
-    name: Анализ GitHub Actions
+    name: GitHub Actions analysis
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -24,13 +24,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Инициализация CodeQL
+      - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
           languages: actions
           build-mode: none
 
-      - name: Анализ
+      - name: Analyze
         uses: github/codeql-action/analyze@v4
         with:
           category: "/language:actions"

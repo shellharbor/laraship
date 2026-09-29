@@ -1,30 +1,30 @@
 #!/bin/bash
 
 # ============================================================
-# deactivate.sh — деактивация/выключение проекта без удаления
+# deactivate.sh — deactivate/disable a project without removing it
 # ============================================================
-# Использование:
+# Usage:
 #   sudo bash deactivate.sh --slug cp
 #
-# Что делает скрипт:
-#   1. Останавливает контейнеры проекта (docker compose down)
-#   2. Отключает конфиг сайта: nginxproxy/sites/<slug>.conf → <slug>.conf.disabled
-#   3. Комментирует записи slug в nginxproxy/docker-compose.yml
-#   4. Перезагружает nginxproxy (docker restart nginxproxy)
+# What the script does:
+#   1. Stops the project containers (docker compose down)
+#   2. Disables the site config: nginxproxy/sites/<slug>.conf → <slug>.conf.disabled
+#   3. Comments out the slug entries in nginxproxy/docker-compose.yml
+#   4. Restarts nginxproxy (docker restart nginxproxy)
 #
-# Параметры:
-#   --slug SLUG           Slug проекта (обязательно)
+# Options:
+#   --slug SLUG           Project slug (required)
 # ============================================================
 
 set -euo pipefail
 
-# ==================== Переменные ====================
+# ==================== Variables ====================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WWW_DIR="/var/www"
 PROXY_DIR="${WWW_DIR}/nginxproxy"
 SLUG=""
 
-# ==================== Цветной вывод ==================
+# ==================== Colored output ==================
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -34,74 +34,74 @@ info()  { echo -e "${GREEN}[INFO]${NC}  $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
-# ==================== Проверка root =================
+# ==================== Root check =================
 check_root() {
     if [[ $EUID -ne 0 ]]; then
-        error "Скрипт должен быть запущен с правами root (sudo)"
+        error "This script must be run as root (sudo)"
     fi
 }
 
-# ==================== Парсинг аргументов ============
+# ==================== Argument parsing ============
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --slug)    SLUG="$2";    shift 2 ;;
-            *) error "Неизвестный аргумент: $1" ;;
+            *) error "Unknown argument: $1" ;;
         esac
     done
 
-    [[ -z "$SLUG" ]] && error "Не указан --slug"
+    [[ -z "$SLUG" ]] && error "--slug is required"
 
     PROJECT_DIR="${WWW_DIR}/${SLUG}"
     if [[ ! -d "$PROJECT_DIR" ]]; then
-        error "Проект не найден: ${PROJECT_DIR}"
+        error "Project not found: ${PROJECT_DIR}"
     fi
 }
 
-# ==================== Остановка контейнеров проекта =
+# ==================== Stopping the project containers =
 stop_project_containers() {
-    info "Останавливаю контейнеры проекта ${SLUG}..."
-    cd "${PROJECT_DIR}" || error "Не удалось перейти в ${PROJECT_DIR}"
+    info "Stopping containers of project ${SLUG}..."
+    cd "${PROJECT_DIR}" || error "Failed to change directory to ${PROJECT_DIR}"
     
     if docker compose down; then
-        info "Контейнеры проекта ${SLUG} остановлены"
+        info "Containers of project ${SLUG} stopped"
     else
-        warn "Возникли проблемы при остановке контейнеров"
+        warn "Problems occurred while stopping the containers"
     fi
 
     cd "${SCRIPT_DIR}" || true
 }
 
-# ==================== Отключение конфига сайта в nginxproxy ====
-# Контейнеры проекта остановлены: если оставить sites/<slug>.conf, nginx прокси
-# не разрешит upstream <slug>_nginx, не запустится — и перестанут работать все сайты
+# ==================== Disabling the site config in nginxproxy ====
+# Project containers are stopped: if sites/<slug>.conf is left in place, the proxy nginx
+# will not resolve upstream <slug>_nginx, will fail to start — and every site will stop working
 disable_site_conf() {
     local SITE_CONF="${PROXY_DIR}/sites/${SLUG}.conf"
 
     if [[ -f "$SITE_CONF" ]]; then
         mv "$SITE_CONF" "${SITE_CONF}.disabled"
-        info "Конфиг ${SLUG}.conf отключён (переименован в ${SLUG}.conf.disabled)"
+        info "Config ${SLUG}.conf disabled (renamed to ${SLUG}.conf.disabled)"
     else
-        warn "Конфиг ${SITE_CONF} не найден, пропускаю."
+        warn "Config ${SITE_CONF} not found, skipping."
     fi
 }
 
-# ==================== Комментирование в docker-compose.yml ====
+# ==================== Commenting out in docker-compose.yml ====
 comment_in_docker_compose() {
     local COMPOSE_FILE="${PROXY_DIR}/docker-compose.yml"
     
     if [[ ! -f "$COMPOSE_FILE" ]]; then
-        error "Файл docker-compose.yml не найден: ${COMPOSE_FILE}"
+        error "docker-compose.yml not found: ${COMPOSE_FILE}"
     fi
     
-    info "Комментирую записи ${SLUG} в docker-compose.yml..."
+    info "Commenting out ${SLUG} entries in docker-compose.yml..."
     
     python3 - "${COMPOSE_FILE}" "${SLUG}" <<'PYEOF'
 import sys
 import re
 
 def in_service(lines, idx, name):
-    """Строка idx лежит внутри сервиса name: ближайший выше ключ с отступом 2 — это name"""
+    """Line idx is inside service name: the nearest key above with indent 2 is name"""
     for j in range(idx - 1, -1, -1):
         m = re.match(r'^  ([\w.-]+):', lines[j])
         if m:
@@ -114,8 +114,8 @@ compose_file = sys.argv[1]
 slug = sys.argv[2]
 
 def is_slug_item(line):
-    """Точное совпадение элемента списка ("- lms", "# - lms", "- lms_ssl_certificates:/...") —
-    подстрока задела бы и другие проекты (lms → lms2)"""
+    """Exact match of a list item ("- lms", "# - lms", "- lms_ssl_certificates:/...") —
+    a substring would also hit other projects (lms → lms2)"""
     s = line.strip().lstrip('#').strip()
     if s.startswith('-'):
         s = s[1:].strip()
@@ -131,14 +131,14 @@ i = 0
 while i < len(lines):
     line = lines[i]
     
-    # Комментируем сеть из x-common-networks
+    # Comment out the network in x-common-networks
     if line.strip().startswith("networks:") and i > 0 and "x-common-networks" in lines[i-1]:
         result.append(line)
         i += 1
-        # Обрабатываем список сетей
+        # Process the network list
         while i < len(lines) and lines[i].strip().startswith("-"):
             if is_slug_item(lines[i]):
-                # Комментируем строку с нужным slug, сохраняя отступ
+                # Comment out the line with the target slug, preserving indentation
                 indent = len(lines[i]) - len(lines[i].lstrip())
                 result.append(" " * indent + "# " + lines[i].strip())
             else:
@@ -146,13 +146,13 @@ while i < len(lines):
             i += 1
         continue
     
-    # Комментируем volume из сервиса nginxproxy
+    # Comment out the volume in the nginxproxy service
     if re.match(r'^\s+volumes:\s*$', line) and in_service(lines, i, "nginxproxy"):
         result.append(line)
         i += 1
         while i < len(lines) and lines[i].strip().startswith("-"):
             if is_slug_item(lines[i]):
-                # Комментируем строку с нужным slug, сохраняя отступ
+                # Comment out the line with the target slug, preserving indentation
                 indent = len(lines[i]) - len(lines[i].lstrip())
                 result.append(" " * indent + "# " + lines[i].strip())
             else:
@@ -160,21 +160,21 @@ while i < len(lines):
             i += 1
         continue
     
-    # Комментируем network на верхнем уровне
+    # Comment out the top-level network
     if re.match(r'^networks:\s*$', line):
         result.append(line)
         i += 1
         while i < len(lines):
-            # Проверяем, не началась ли новая секция верхнего уровня
+            # Check whether a new top-level section has started
             if lines[i] and not lines[i].startswith(' '):
                 break
-            # Если это блок с нужным slug
+            # If this is the block for the target slug
             if lines[i].strip().startswith(f"{slug}:"):
-                # Комментируем заголовок блока, сохраняя отступ
+                # Comment out the block header, preserving indentation
                 indent = len(lines[i]) - len(lines[i].lstrip())
                 result.append(" " * indent + "# " + lines[i].strip())
                 i += 1
-                # Комментируем все дочерние элементы
+                # Comment out all child items
                 while i < len(lines) and lines[i].startswith('    '):
                     indent = len(lines[i]) - len(lines[i].lstrip())
                     result.append(" " * indent + "# " + lines[i].strip())
@@ -184,21 +184,21 @@ while i < len(lines):
                 i += 1
         continue
     
-    # Комментируем volume на верхнем уровне
+    # Comment out the top-level volume
     if re.match(r'^volumes:\s*$', line):
         result.append(line)
         i += 1
         while i < len(lines):
-            # Проверяем, не началась ли новая секция верхнего уровня
+            # Check whether a new top-level section has started
             if lines[i] and not lines[i].startswith(' '):
                 break
-            # Если это блок с нужным slug
+            # If this is the block for the target slug
             if lines[i].strip().startswith(f"{slug}_ssl_certificates:"):
-                # Комментируем заголовок блока, сохраняя отступ
+                # Comment out the block header, preserving indentation
                 indent = len(lines[i]) - len(lines[i].lstrip())
                 result.append(" " * indent + "# " + lines[i].strip())
                 i += 1
-                # Комментируем все дочерние элементы
+                # Comment out all child items
                 while i < len(lines) and lines[i].startswith('    '):
                     indent = len(lines[i]) - len(lines[i].lstrip())
                     result.append(" " * indent + "# " + lines[i].strip())
@@ -214,47 +214,47 @@ while i < len(lines):
 with open(compose_file, 'w') as f:
     f.write("\n".join(result) + "\n")
 
-print(f"Записи {slug} закомментированы в docker-compose.yml")
+print(f"Entries for {slug} commented out in docker-compose.yml")
 PYEOF
 
     if [[ $? -eq 0 ]]; then
-        info "docker-compose.yml успешно обновлён"
+        info "docker-compose.yml updated successfully"
     else
-        error "Не удалось обновить docker-compose.yml"
+        error "Failed to update docker-compose.yml"
     fi
 }
 
-# ==================== Перезагрузка nginxproxy ========
+# ==================== Restarting nginxproxy ========
 restart_nginxproxy() {
-    info "Перезагружаю nginxproxy..."
+    info "Restarting nginxproxy..."
     
     if docker restart nginxproxy; then
-        info "nginxproxy успешно перезагружен"
+        info "nginxproxy restarted successfully"
     else
-        warn "Возникли проблемы при перезагрузке nginxproxy"
+        warn "Problems occurred while restarting nginxproxy"
     fi
 }
 
-# ==================== Вывод итоговой информации =====
+# ==================== Summary output =====
 print_summary() {
     echo ""
     echo "============================================================"
-    info "Деактивация проекта завершена!"
+    info "Project deactivation completed!"
     echo "============================================================"
     echo ""
-    echo "ПРОЕКТ: ${SLUG}"
-    echo "  Статус:         ДЕАКТИВИРОВАН"
+    echo "PROJECT: ${SLUG}"
+    echo "  Status:         DEACTIVATED"
     echo ""
-    echo "Что было сделано:"
-    echo "  ✓ Контейнеры проекта остановлены (docker compose down)"
-    echo "  ✓ Конфиг nginxproxy/sites/${SLUG}.conf отключён (.disabled)"
-    echo "  ✓ Записи закомментированы в nginxproxy/docker-compose.yml"
-    echo "  ✓ nginxproxy перезагружен"
+    echo "What was done:"
+    echo "  ✓ Project containers stopped (docker compose down)"
+    echo "  ✓ nginxproxy/sites/${SLUG}.conf config disabled (.disabled)"
+    echo "  ✓ Entries commented out in nginxproxy/docker-compose.yml"
+    echo "  ✓ nginxproxy restarted"
     echo ""
-    echo "Для активации проекта используйте:"
+    echo "To activate the project, use:"
     echo "  sudo bash activate.sh --slug ${SLUG}"
     echo ""
-    echo "Для полного удаления проекта используйте:"
+    echo "To remove the project completely, use:"
     echo "  sudo bash remove.sh --slug ${SLUG} --domain <domain>"
     echo ""
     echo "============================================================"
@@ -266,7 +266,7 @@ main() {
     check_root
     parse_args "$@"
     
-    info "Начинаю деактивацию проекта ${SLUG}..."
+    info "Starting deactivation of project ${SLUG}..."
     echo ""
     
     stop_project_containers

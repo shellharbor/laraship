@@ -6,7 +6,7 @@ services:
     container_name: {SLUG}_php
     restart: always
     ports:
-      # Только localhost: nginx ходит к PHP по внутренней сети, открытый наружу FastCGI = выполнение кода
+      # localhost only: nginx reaches PHP over the internal network, and FastCGI exposed publicly = code execution
       - "127.0.0.1:${PHP_PORT}:9000"
     volumes:
       - ./public_html:/var/www/html
@@ -18,7 +18,7 @@ services:
     build:
       context: ./.docker/nginx
       dockerfile: nginx-1.29.1.Dockerfile
-    # Раз в 6 часов перечитываем конфиг, чтобы подхватить сертификаты, продлённые certbot_renew
+    # Reload the config every 6 hours to pick up certificates renewed by certbot_renew
     command: /bin/sh -c 'while :; do sleep 21600 & wait $${!}; nginx -s reload; done & exec nginx -g "daemon off;"'
     container_name: {SLUG}_nginx
     restart: always
@@ -128,8 +128,8 @@ services:
       - {SLUG}_ssl_certificates:/etc/letsencrypt
       - {SLUG}_certbot_www:/var/www/certbot
       - /var/log/letsencrypt:/var/log/letsencrypt
-    # entrypoint, а не command: у образа certbot entrypoint = certbot, и command превращался в "certbot sh -c ...".
-    # Новый сертификат nginx подхватывает сам (периодический reload в сервисе nginx)
+    # entrypoint, not command: the certbot image has entrypoint = certbot, so command turned into "certbot sh -c ...".
+    # nginx picks up the new certificate on its own (periodic reload in the nginx service)
     entrypoint: >
       sh -c "while true; do
         echo 'Checking for certificate renewal...'
@@ -197,9 +197,9 @@ services:
   # cd /var/www/{SLUG} && docker compose run --rm artisan make:filament-user
 
   # cd /var/www/{SLUG} && docker compose run --rm composer remove tigusigalpa/monica-ai-php
-  # Composer запускается в том же PHP-образе, что и приложение: зависимости подбираются
-  # под реальную версию PHP и расширения (composer:latest с --ignore-platform-reqs ставил
-  # пакеты под более новый PHP, и приложение падало с syntax error)
+  # Composer runs in the same PHP image as the application: dependencies are resolved
+  # for the actual PHP version and extensions (composer:latest with --ignore-platform-reqs installed
+  # packages for a newer PHP, and the application crashed with a syntax error)
   composer:
     build:
       context: ./.docker/php

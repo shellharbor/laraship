@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # ============================================================
-# deploy-laravel.sh — развёртывание Laravel (+ Filament) в Docker
+# deploy-laravel.sh — deploy Laravel (+ Filament) in Docker
 # ============================================================
-# Использование:
+# Usage:
 #   sudo bash deploy-laravel.sh \
 #     --slug m311 \
 #     --domain m311.example.com \
@@ -12,47 +12,47 @@ set -euo pipefail
 #     --install-filament --filament-email admin@example.com \
 #     --ssl-email admin@example.com
 #
-# Все пароли и имена БД генерируются автоматически, если не указаны явно.
+# All passwords and DB names are generated automatically unless given explicitly.
 #
-# Обязательные аргументы:
-#   --domain DOMAIN              Домен сайта (без --slug к нему добавится случайный slug)
-#   --db-type postgres|mysql     Тип БД
-#   --ssl-email EMAIL            Email для Let's Encrypt (не нужен при --no-ssl)
+# Required arguments:
+#   --domain DOMAIN              Site domain (without --slug, a random slug is prepended to it)
+#   --db-type postgres|mysql     DB type
+#   --ssl-email EMAIL            Email for Let's Encrypt (not needed with --no-ssl)
 #
-# Проект:
-#   --slug SLUG                  Идентификатор проекта (по умолчанию — случайный)
-#   --laravel-version X.Y        Версия Laravel (минимум 10.0, по умолчанию 13.0)
-#   --create-backup              Создать zip-архив проекта в /tmp после развёртывания
-#   --endpoint URL               Отправить данные проекта (JSON, PUT) на URL
+# Project:
+#   --slug SLUG                  Project identifier (random by default)
+#   --laravel-version X.Y        Laravel version (minimum 10.0, default 13.0)
+#   --create-backup              Create a zip archive of the project in /tmp after deployment
+#   --endpoint URL               Send project data (JSON, PUT) to URL
 #
 # Filament:
-#   --install-filament           Установить filament/filament и панель /admin
-#   --filament-email EMAIL       Email администратора (обязателен с --install-filament)
-#   --filament-name NAME         Имя администратора (генерируется, если не указано)
-#   --filament-password PASS     Пароль администратора (генерируется, если не указан)
+#   --install-filament           Install filament/filament and the /admin panel
+#   --filament-email EMAIL       Admin email (required with --install-filament)
+#   --filament-name NAME         Admin name (generated if not given)
+#   --filament-password PASS     Admin password (generated if not given)
 #
-# База данных:
-#   --db-native                  Использовать БД на хосте, а не в контейнере
-#   --db-root-password PASS      Root-пароль нативной MySQL (обязателен с --db-native + mysql)
+# Database:
+#   --db-native                  Use a database on the host instead of in a container
+#   --db-root-password PASS      Root password of native MySQL (required with --db-native + mysql)
 #   --db-mysql-name, --db-mysql-user, --db-mysql-password, --db-mysql-root-password
 #   --db-postgres-name, --db-postgres-user, --db-postgres-password
 #
-# Порты (по умолчанию — случайный свободный порт из диапазона):
+# Ports (default: a random free port from the range):
 #   --port-http      8100–8400      --port-php       9100–9600
 #   --port-https     4100–4300      --port-redis     6500–6800
 #   --port-mysql     3400–3600      --port-postgres  5500–5800
-#   Для нативной БД порт по умолчанию 3306 / 5432.
+#   For a native DB the default port is 3306 / 5432.
 #
-# Прочее:
-#   --redis-password PASS        Пароль Redis
-#   --create-dhparam             Создать dhparam.pem для SSL (занимает несколько минут)
-#   --enable-basic-auth          Включить HTTP Basic Authentication
-#   --auth-user USER             Пользователь Basic Auth (генерируется, если не указан)
-#   --auth-password PASS         Пароль Basic Auth (генерируется, если не указан)
-#   --no-ssl                     Не получать SSL-сертификат
-#   -h, --help                   Показать эту справку
+# Other:
+#   --redis-password PASS        Redis password
+#   --create-dhparam             Create dhparam.pem for SSL (takes a few minutes)
+#   --enable-basic-auth          Enable HTTP Basic Authentication
+#   --auth-user USER             Basic Auth user (generated if not given)
+#   --auth-password PASS         Basic Auth password (generated if not given)
+#   --no-ssl                     Do not obtain an SSL certificate
+#   -h, --help                   Show this help
 #
-# Скрипт должен лежать рядом с папками-шаблонами laravel/ и nginxproxy/.
+# The script must be located next to the template folders laravel/ and nginxproxy/.
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -61,7 +61,7 @@ PROXY_DIR="${WWW_DIR}/nginxproxy"
 APP_TYPE="laravel"
 TEMPLATE_DIR="${SCRIPT_DIR}/${APP_TYPE}"
 
-# ======================== Цвета =============================
+# ======================== Colors ============================
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -72,47 +72,47 @@ warn()    { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 error()   { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 success() { echo -e "${GREEN}[OK]${NC}    $*"; }
 
-# Печатает шапку этого файла как справку
+# Prints this file's header as help
 usage() {
     awk 'NR < 5 { next } !/^#/ { exit } /^# =+$/ { next } { sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"
 }
 
-# ==================== Генерация случайных учетных данных ====================
-# random_string <набор символов для tr> <длина>
+# ==================== Random credential generation ====================
+# random_string <character set for tr> <length>
 random_string() {
     local CHARSET=$1
     local LENGTH=$2
     local RESULT=""
-    # head закрывает пайп раньше tr (SIGPIPE) — с pipefail это ненулевой код, поэтому || true
+    # head closes the pipe before tr finishes (SIGPIPE) — with pipefail that is a non-zero exit code, hence || true
     RESULT=$(head -c 4096 /dev/urandom | LC_ALL=C tr -dc "$CHARSET" | head -c "$LENGTH") || true
     echo "$RESULT"
 }
 
-# generate_random_name - генерирует имя (15 символов)
-# Всегда начинается с буквы для совместимости с SQL
+# generate_random_name - generates a name (15 characters)
+# Always starts with a letter for SQL compatibility
 generate_random_name() {
     echo "$(random_string 'a-z' 1)$(random_string 'a-z0-9' 14)"
 }
 
-# generate_random_password - генерирует сложный пароль (15 символов)
-# Без символов, ломающих sed (&, |, /, \), .env и docker compose ($, #, =, кавычки)
+# generate_random_password - generates a strong password (15 characters)
+# Without characters that break sed (&, |, /, \), .env and docker compose ($, #, =, quotes)
 generate_random_password() {
     random_string 'A-Za-z0-9@%_+-' 15
 }
 
-# generate_random_slug - генерирует случайный slug (8 символов)
+# generate_random_slug - generates a random slug (8 characters)
 generate_random_slug() {
     random_string 'a-z0-9' 8
 }
 
-# Экранирует строку для правой части sed-замены (s|...|ЗДЕСЬ|)
+# Escapes a string for the right-hand side of a sed substitution (s|...|HERE|)
 sed_escape() {
     printf '%s' "$1" | sed -e 's/[\\|&]/\\&/g'
 }
 
-# ==================== Поиск свободного порта ====================
-# find_free_port <min> <max> <описание>
-# Выбирает случайный свободный порт из диапазона [min, max]
+# ==================== Free port lookup ====================
+# find_free_port <min> <max> <description>
+# Picks a random free port from the range [min, max]
 find_free_port() {
     local MIN=$1
     local MAX=$2
@@ -123,7 +123,7 @@ find_free_port() {
 
     while [[ $ATTEMPTS -lt $MAX_ATTEMPTS ]]; do
         local PORT=$(( RANDOM % RANGE + MIN ))
-        # Проверяем через ss что порт не занят
+        # Use ss to check that the port is not in use
         if ! ss -tlnp 2>/dev/null | grep -q ":${PORT} " && \
            ! ss -ulnp 2>/dev/null | grep -q ":${PORT} "; then
             echo "$PORT"
@@ -132,10 +132,10 @@ find_free_port() {
         ATTEMPTS=$((ATTEMPTS + 1))
     done
 
-    error "Не удалось найти свободный порт для ${DESC} в диапазоне ${MIN}-${MAX}"
+    error "Could not find a free port for ${DESC} in range ${MIN}-${MAX}"
 }
 
-# ==================== Установка недостающих пакетов ====================
+# ==================== Install missing packages ====================
 ensure_packages() {
     local MISSING=()
     local PKG
@@ -143,37 +143,37 @@ ensure_packages() {
         command -v "$PKG" &>/dev/null || MISSING+=("$PKG")
     done
     if [[ ${#MISSING[@]} -gt 0 ]]; then
-        warn "Не установлены: ${MISSING[*]}. Устанавливаю..."
+        warn "Not installed: ${MISSING[*]}. Installing..."
         apt-get update -qq && apt-get install -y -qq "${MISSING[@]}"
     fi
 }
 
-# ==================== Проверка root =================
+# ==================== Root check =================
 check_root() {
     if [[ $EUID -ne 0 ]]; then
-        error "Этот скрипт нужно запускать от root (sudo)."
+        error "This script must be run as root (sudo)."
     fi
 }
 
-# ==================== Проверка/создание /var/www ====
+# ==================== Check/create /var/www ====
 ensure_www_dir() {
     if [[ ! -d "$WWW_DIR" ]]; then
-        info "Папка ${WWW_DIR} не существует, создаю..."
-        mkdir -p "$WWW_DIR" || error "Не удалось создать папку ${WWW_DIR}"
-        info "Папка ${WWW_DIR} успешно создана"
+        info "Directory ${WWW_DIR} does not exist, creating..."
+        mkdir -p "$WWW_DIR" || error "Failed to create directory ${WWW_DIR}"
+        info "Directory ${WWW_DIR} created successfully"
     else
-        info "Папка ${WWW_DIR} уже существует"
+        info "Directory ${WWW_DIR} already exists"
     fi
 }
 
-# ==================== Установка Docker ======================
+# ==================== Docker installation ======================
 install_docker() {
     if command -v docker &>/dev/null; then
-        info "Docker уже установлен: $(docker --version)"
+        info "Docker is already installed: $(docker --version)"
         return
     fi
 
-    info "Устанавливаю Docker..."
+    info "Installing Docker..."
     apt-get update -y
     apt-get install -y ca-certificates curl gnupg lsb-release
 
@@ -194,23 +194,23 @@ install_docker() {
     systemctl enable docker
     systemctl start docker
 
-    info "Docker установлен: $(docker --version)"
+    info "Docker installed: $(docker --version)"
 }
 
-# ==================== Инициализация nginxproxy ===============
+# ==================== nginxproxy initialization ===============
 init_nginxproxy() {
     if [[ -d "${PROXY_DIR}" ]]; then
-        info "Папка ${PROXY_DIR} уже существует, пропускаю инициализацию."
+        info "Directory ${PROXY_DIR} already exists, skipping initialization."
         return
     fi
 
-    info "Создаю ${PROXY_DIR} из шаблона..."
+    info "Creating ${PROXY_DIR} from the template..."
     mkdir -p "${PROXY_DIR}/sites"
     cp "${SCRIPT_DIR}/nginxproxy/nginx.Dockerfile"   "${PROXY_DIR}/nginx.Dockerfile"
     cp "${SCRIPT_DIR}/nginxproxy/nginx.conf"         "${PROXY_DIR}/nginx.conf"
     cp "${SCRIPT_DIR}/nginxproxy/site-template.conf" "${PROXY_DIR}/site-template.conf"
 
-    # Базовый docker-compose.yml прокси — без сетей/томов, они добавляются для каждого сайта
+    # Base proxy docker-compose.yml — without networks/volumes, they are added per site
     cat > "${PROXY_DIR}/docker-compose.yml" <<'DCEOF'
 # cd /var/www/nginxproxy && docker compose up -d && docker restart nginxproxy
 x-common-networks: &common-networks
@@ -222,7 +222,7 @@ services:
     build:
       context: .
       dockerfile: nginx.Dockerfile
-    # Раз в 6 часов перечитываем конфиг, чтобы подхватить продлённые сертификаты сайтов
+    # Reload the config every 6 hours to pick up renewed site certificates
     command: /bin/sh -c 'while :; do sleep 21600 & wait $${!}; nginx -s reload; done & exec nginx -g "daemon off;"'
     ports:
       - "80:80"
@@ -235,10 +235,10 @@ networks:
 volumes:
 DCEOF
 
-    info "nginxproxy инициализирован в ${PROXY_DIR}"
+    info "nginxproxy initialized in ${PROXY_DIR}"
 }
 
-# ==================== Создание dhparam.pem ===================
+# ==================== dhparam.pem creation ===================
 create_dhparam() {
     local DHPARAM_FILE="${PROXY_DIR}/dhparam.pem"
 
@@ -247,21 +247,21 @@ create_dhparam() {
     fi
 
     if [[ -f "$DHPARAM_FILE" ]]; then
-        info "Файл dhparam.pem уже существует: ${DHPARAM_FILE}"
+        info "File dhparam.pem already exists: ${DHPARAM_FILE}"
         return
     fi
 
-    info "Создаю dhparam.pem (это займёт несколько минут)..."
+    info "Creating dhparam.pem (this takes a few minutes)..."
     docker run --rm -v "${PROXY_DIR}:/output" alpine/openssl dhparam -out /output/dhparam.pem 2048
 
     if [[ -f "$DHPARAM_FILE" ]]; then
-        info "dhparam.pem успешно создан: ${DHPARAM_FILE}"
+        info "dhparam.pem created successfully: ${DHPARAM_FILE}"
     else
-        error "Не удалось создать dhparam.pem"
+        error "Failed to create dhparam.pem"
     fi
 }
 
-# ==================== Парсинг аргументов ====================
+# ==================== Argument parsing ====================
 SLUG=""
 DOMAIN=""
 LARAVEL_VERSION="13.0"
@@ -302,8 +302,8 @@ parse_args() {
             --slug)                   SLUG="$2";                   shift 2 ;;
             --domain)                 DOMAIN="$2";                 shift 2 ;;
             --type)
-                # Совместимость с вызовами старого deploy.sh
-                [[ "$2" == "$APP_TYPE" ]] || error "Этот скрипт разворачивает только Laravel. Для '$2' используйте deploy-$2.sh"
+                # Compatibility with calls from the old deploy.sh
+                [[ "$2" == "$APP_TYPE" ]] || error "This script only deploys Laravel. For '$2' use deploy-$2.sh"
                 shift 2 ;;
             --laravel-version)        LARAVEL_VERSION="$2";        shift 2 ;;
             --install-filament)       INSTALL_FILAMENT=true;       shift 1 ;;
@@ -336,119 +336,119 @@ parse_args() {
             --no-ssl)                 OBTAIN_SSL=false;            shift 1 ;;
             --ssl-email)              SSL_EMAIL="$2";              shift 2 ;;
             --endpoint)               ENDPOINT="$2";               shift 2 ;;
-            *) error "Неизвестный аргумент: $1 (см. --help)" ;;
+            *) error "Unknown argument: $1 (see --help)" ;;
         esac
     done
 
-    [[ -z "$DOMAIN" ]]  && error "Не указан --domain"
-    [[ -z "$DB_TYPE" ]] && error "Не указан --db-type"
+    [[ -z "$DOMAIN" ]]  && error "--domain is not specified"
+    [[ -z "$DB_TYPE" ]] && error "--db-type is not specified"
 
     if [[ "$DB_TYPE" != "postgres" && "$DB_TYPE" != "mysql" ]]; then
-        error "Тип БД должен быть 'postgres' или 'mysql', получено: ${DB_TYPE}"
+        error "DB type must be 'postgres' or 'mysql', got: ${DB_TYPE}"
     fi
 
-    # --- Проверка root-пароля для нативного MySQL ---
+    # --- Check the root password for native MySQL ---
     if [[ "$DB_NATIVE" == true && "$DB_TYPE" == "mysql" && -z "$DB_ROOT_PASSWORD" ]]; then
-        error "Для нативной MySQL БД необходимо указать --db-root-password"
+        error "--db-root-password is required for a native MySQL database"
     fi
 
     if [[ "$OBTAIN_SSL" == true && -z "$SSL_EMAIL" ]]; then
-        error "Для получения SSL-сертификата необходимо указать --ssl-email"
+        error "--ssl-email is required to obtain an SSL certificate"
     fi
 
-    # --- Filament: проверяем до начала установки, а не после ---
+    # --- Filament: validate before the installation starts, not after ---
     if [[ "$INSTALL_FILAMENT" == true && -z "$FILAMENT_EMAIL" ]]; then
-        error "Для установки Filament необходимо указать --filament-email"
+        error "--filament-email is required to install Filament"
     fi
 
-    # --- Генерация slug, если не указан ---
+    # --- Generate slug if not given ---
     if [[ -z "$SLUG" ]]; then
         SLUG=$(generate_random_slug)
         DOMAIN="${SLUG}.${DOMAIN}"
-        info "Сгенерирован slug: ${SLUG}"
-        info "Обновлён домен: ${DOMAIN}"
+        info "Generated slug: ${SLUG}"
+        info "Domain updated: ${DOMAIN}"
     fi
 
     if ! [[ "$SLUG" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]; then
-        error "Недопустимый slug: ${SLUG} (разрешены буквы, цифры, '-' и '_')"
+        error "Invalid slug: ${SLUG} (letters, digits, '-' and '_' are allowed)"
     fi
     if ! [[ "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]]; then
-        error "Недопустимый домен: ${DOMAIN}"
+        error "Invalid domain: ${DOMAIN}"
     fi
 
-    # --- Валидация версии Laravel ---
+    # --- Validate Laravel version ---
     if ! [[ "$LARAVEL_VERSION" =~ ^[0-9]+\.[0-9]+$ ]]; then
-        error "Неверный формат версии Laravel: ${LARAVEL_VERSION}. Ожидается формат X.Y (например: 12.0)"
+        error "Invalid Laravel version format: ${LARAVEL_VERSION}. Expected X.Y (for example: 12.0)"
     fi
     local MAJOR_VERSION="${LARAVEL_VERSION%%.*}"
     if [[ $MAJOR_VERSION -lt 10 ]]; then
-        error "Минимальная поддерживаемая версия Laravel: 10.0, указана: ${LARAVEL_VERSION}"
+        error "Minimum supported Laravel version: 10.0, got: ${LARAVEL_VERSION}"
     fi
-    info "Будет установлен Laravel версии ^${LARAVEL_VERSION}"
+    info "Laravel version to be installed: ^${LARAVEL_VERSION}"
 
-    # --- Генерация Redis пароля, если не указан ---
+    # --- Generate Redis password if not given ---
     if [[ -z "$REDIS_PASSWORD" ]]; then
         REDIS_PASSWORD=$(generate_random_password)
-        info "Сгенерирован пароль Redis: ${REDIS_PASSWORD}"
+        info "Generated Redis password: ${REDIS_PASSWORD}"
     fi
 
-    # --- Генерация учетных данных MySQL, если не указаны ---
+    # --- Generate MySQL credentials if not given ---
     if [[ "$DB_TYPE" == "mysql" ]]; then
         if [[ -z "$DB_MYSQL_NAME" ]]; then
             DB_MYSQL_NAME=$(generate_random_name)
-            info "Сгенерировано имя БД MySQL: ${DB_MYSQL_NAME}"
+            info "Generated MySQL DB name: ${DB_MYSQL_NAME}"
         fi
         if [[ -z "$DB_MYSQL_USER" ]]; then
             DB_MYSQL_USER=$(generate_random_name)
-            info "Сгенерирован пользователь MySQL: ${DB_MYSQL_USER}"
+            info "Generated MySQL user: ${DB_MYSQL_USER}"
         fi
         if [[ -z "$DB_MYSQL_PASSWORD" ]]; then
             DB_MYSQL_PASSWORD=$(generate_random_password)
-            info "Сгенерирован пароль MySQL: ${DB_MYSQL_PASSWORD}"
+            info "Generated MySQL password: ${DB_MYSQL_PASSWORD}"
         fi
         if [[ -z "$DB_MYSQL_ROOT_PASSWORD" ]]; then
             DB_MYSQL_ROOT_PASSWORD=$(generate_random_password)
-            info "Сгенерирован root пароль MySQL: ${DB_MYSQL_ROOT_PASSWORD}"
+            info "Generated MySQL root password: ${DB_MYSQL_ROOT_PASSWORD}"
         fi
     fi
 
-    # --- Генерация учетных данных PostgreSQL, если не указаны ---
+    # --- Generate PostgreSQL credentials if not given ---
     if [[ "$DB_TYPE" == "postgres" ]]; then
         if [[ -z "$DB_POSTGRES_NAME" ]]; then
             DB_POSTGRES_NAME=$(generate_random_name)
-            info "Сгенерировано имя БД PostgreSQL: ${DB_POSTGRES_NAME}"
+            info "Generated PostgreSQL DB name: ${DB_POSTGRES_NAME}"
         fi
         if [[ -z "$DB_POSTGRES_USER" ]]; then
             DB_POSTGRES_USER=$(generate_random_name)
-            info "Сгенерирован пользователь PostgreSQL: ${DB_POSTGRES_USER}"
+            info "Generated PostgreSQL user: ${DB_POSTGRES_USER}"
         fi
         if [[ -z "$DB_POSTGRES_PASSWORD" ]]; then
             DB_POSTGRES_PASSWORD=$(generate_random_password)
-            info "Сгенерирован пароль PostgreSQL: ${DB_POSTGRES_PASSWORD}"
+            info "Generated PostgreSQL password: ${DB_POSTGRES_PASSWORD}"
         fi
     fi
 
-    # --- Генерация учетных данных Basic Auth, если не указаны ---
+    # --- Generate Basic Auth credentials if not given ---
     if [[ "$ENABLE_BASIC_AUTH" == true ]]; then
         if [[ -z "$AUTH_USER" ]]; then
             AUTH_USER=$(generate_random_name)
-            info "Сгенерирован пользователь Basic Auth: ${AUTH_USER}"
+            info "Generated Basic Auth user: ${AUTH_USER}"
         fi
         if [[ -z "$AUTH_PASSWORD" ]]; then
             AUTH_PASSWORD=$(generate_random_password)
-            info "Сгенерирован пароль Basic Auth: ${AUTH_PASSWORD}"
+            info "Generated Basic Auth password: ${AUTH_PASSWORD}"
         fi
     fi
 
     if [[ ! -d "$TEMPLATE_DIR" ]]; then
-        error "Папка шаблона не найдена: ${TEMPLATE_DIR}"
+        error "Template directory not found: ${TEMPLATE_DIR}"
     fi
 }
 
-# ==================== Назначение портов ====================
-# Порты, указанные вручную, не меняются; остальные подбираются из диапазонов
+# ==================== Port assignment ====================
+# Manually specified ports are left unchanged; the rest are picked from the ranges
 assign_ports() {
-    info "Подбираю свободные порты..."
+    info "Selecting free ports..."
 
     if [[ -z "$PORT_HTTP" ]]; then
         PORT_HTTP=$(find_free_port 8100 8400 "HTTP")
@@ -473,7 +473,7 @@ assign_ports() {
     if [[ "$DB_TYPE" == "mysql" ]]; then
         if [[ "$DB_NATIVE" == true ]]; then
             PORT_MYSQL="${PORT_MYSQL:-3306}"
-            info "  MySQL:      ${PORT_MYSQL} (нативная БД)"
+            info "  MySQL:      ${PORT_MYSQL} (native DB)"
         else
             if [[ -z "$PORT_MYSQL" ]]; then
                 PORT_MYSQL=$(find_free_port 3400 3600 "MySQL")
@@ -483,7 +483,7 @@ assign_ports() {
     else
         if [[ "$DB_NATIVE" == true ]]; then
             PORT_POSTGRES="${PORT_POSTGRES:-5432}"
-            info "  PostgreSQL: ${PORT_POSTGRES} (нативная БД)"
+            info "  PostgreSQL: ${PORT_POSTGRES} (native DB)"
         else
             if [[ -z "$PORT_POSTGRES" ]]; then
                 PORT_POSTGRES=$(find_free_port 5500 5800 "PostgreSQL")
@@ -493,16 +493,16 @@ assign_ports() {
     fi
 }
 
-# ==================== Настройка БД в docker-compose.yml ======
-# Удаляет неиспользуемый контейнер БД (и выбранный — при нативной БД),
-# их volumes и зависимости, а выбранную БД переименовывает в db / <slug>_db
+# ==================== DB setup in docker-compose.yml ======
+# Removes the unused DB container (and the selected one for a native DB),
+# their volumes and dependencies, and renames the selected DB to db / <slug>_db
 configure_compose_db() {
     local COMPOSE_FILE="$1"
 
     if [[ "$DB_NATIVE" == true ]]; then
-        info "Удаляю контейнеры БД из docker-compose.yml (используется нативная БД)..."
+        info "Removing DB containers from docker-compose.yml (native DB in use)..."
     else
-        info "Настраиваю docker-compose.yml для БД типа ${DB_TYPE}..."
+        info "Configuring docker-compose.yml for DB type ${DB_TYPE}..."
     fi
 
     python3 - "$COMPOSE_FILE" "$SLUG" "$DB_TYPE" "$DB_NATIVE" <<'PYEOF'
@@ -521,7 +521,7 @@ if native:
 with open(path) as f:
     lines = f.read().splitlines()
 
-# --- 1. Удаляем блоки сервисов и volumes ---
+# --- 1. Remove service and volume blocks ---
 result = []
 section = None
 skipping = False
@@ -543,14 +543,14 @@ for line in lines:
         continue
 
     if skipping:
-        # Внутри удаляемого блока: пустые строки и всё с отступом больше 2
+        # Inside a removed block: blank lines and everything indented more than 2
         if line.strip() == '' or len(line) - len(line.lstrip()) > 2:
             continue
         skipping = False
 
     result.append(line)
 
-# --- 2. Нативная БД: убираем зависимости от контейнера БД ---
+# --- 2. Native DB: remove dependencies on the DB container ---
 if native:
     db_names = {'db', 'db_postgres', 'db_mysql'}
     cleaned = []
@@ -574,7 +574,7 @@ if native:
         i += 1
     result = cleaned
 
-# --- 3. Переименовываем выбранную БД: db_postgres → db, <slug>_db_postgres → <slug>_db ---
+# --- 3. Rename the selected DB: db_postgres → db, <slug>_db_postgres → <slug>_db ---
 result = [re.sub(rf'\bdb_{db_type}\b', 'db', l.replace(f'{slug}_db_{db_type}', f'{slug}_db'))
           for l in result]
 
@@ -583,11 +583,11 @@ with open(path, 'w') as f:
 PYEOF
 }
 
-# ==================== Генерация .env проекта ======================
+# ==================== Project .env generation ======================
 write_project_env() {
     local ENV_FILE="${PROJECT_DIR}/.env"
 
-    info "Генерирую .env для ${SLUG}..."
+    info "Generating .env for ${SLUG}..."
     {
         echo "SITE_HOST=${DOMAIN}"
         echo "SITE_PORT_HTTP=${PORT_HTTP}"
@@ -620,15 +620,15 @@ write_project_env() {
     } > "$ENV_FILE"
 }
 
-# ==================== Создание проекта ======================
+# ==================== Project creation ======================
 create_project() {
     PROJECT_DIR="${WWW_DIR}/${SLUG}"
 
     if [[ -d "$PROJECT_DIR" ]]; then
-        warn "Папка проекта уже существует: ${PROJECT_DIR}"
+        warn "Project directory already exists: ${PROJECT_DIR}"
 
-        # Проверяем, запущены ли контейнеры проекта
-        info "Проверяю наличие контейнеров проекта..."
+        # Check whether the project containers are running
+        info "Checking for project containers..."
 
         local RUNNING_CONTAINERS
         local ALL_CONTAINERS
@@ -636,28 +636,28 @@ create_project() {
         ALL_CONTAINERS=$(docker ps -aq --filter "name=${SLUG}_" 2>/dev/null | wc -l)
 
         if [[ $ALL_CONTAINERS -eq 0 ]]; then
-            warn "Контейнеры проекта не найдены. Удаляю папку проекта..."
+            warn "No project containers found. Removing the project directory..."
         else
             if [[ $RUNNING_CONTAINERS -gt 0 ]]; then
-                warn "Контейнеры проекта запущены ($RUNNING_CONTAINERS из $ALL_CONTAINERS). Останавливаю..."
-                cd "$PROJECT_DIR" || error "Не удалось перейти в ${PROJECT_DIR}"
+                warn "Project containers are running ($RUNNING_CONTAINERS of $ALL_CONTAINERS). Stopping..."
+                cd "$PROJECT_DIR" || error "Failed to change to ${PROJECT_DIR}"
                 docker compose down
                 cd "${SCRIPT_DIR}" || true
-                info "Контейнеры остановлены"
+                info "Containers stopped"
             fi
-            warn "Удаляю папку проекта..."
+            warn "Removing the project directory..."
         fi
         rm -rf "$PROJECT_DIR"
-        info "Папка проекта удалена. Продолжаю создание..."
+        info "Project directory removed. Continuing creation..."
     fi
 
-    info "Создаю проект ${SLUG} (${APP_TYPE}) в ${PROJECT_DIR}..."
+    info "Creating project ${SLUG} (${APP_TYPE}) in ${PROJECT_DIR}..."
     mkdir -p "${PROJECT_DIR}"
 
-    # Копируем всё содержимое шаблона
+    # Copy the entire template contents
     cp -a "${TEMPLATE_DIR}/." "${PROJECT_DIR}/"
 
-    # --- Организация Dockerfile'ов в подпапки ---
+    # --- Organize Dockerfiles into subfolders ---
     if [[ -d "${PROJECT_DIR}/.docker" ]]; then
         mkdir -p "${PROJECT_DIR}/.docker/php"
         mkdir -p "${PROJECT_DIR}/.docker/nginx"
@@ -671,114 +671,114 @@ create_project() {
         fi
     fi
 
-    # --- public_html: composer работает в PHP-образе от пользователя www (uid 1000) ---
+    # --- public_html: composer runs in the PHP image as user www (uid 1000) ---
     mkdir -p "${PROJECT_DIR}/public_html"
     chown 1000:1000 "${PROJECT_DIR}/public_html"
 
-    # --- Замена {SLUG} → slug в docker-compose.yml ---
+    # --- Replace {SLUG} → slug in docker-compose.yml ---
     sed -i "s/{SLUG}/${SLUG}/g" "${PROJECT_DIR}/docker-compose.yml"
 
-    # --- Контейнер БД: выбранный тип или нативная БД ---
+    # --- DB container: selected type or native DB ---
     configure_compose_db "${PROJECT_DIR}/docker-compose.yml"
 
-    # --- .env проекта ---
+    # --- Project .env ---
     write_project_env
 
-    # --- Замена MYSITE.COM → domain в _site.conf ---
+    # --- Replace MYSITE.COM → domain in _site.conf ---
     if [[ -f "${PROJECT_DIR}/.config/nginx/_site.conf" ]]; then
         sed -i "s/MYSITE\.COM/${DOMAIN}/g" "${PROJECT_DIR}/.config/nginx/_site.conf"
         sed -i "s/{SLUG}/${SLUG}/g" "${PROJECT_DIR}/.config/nginx/_site.conf"
     fi
 
-    # --- Раскомментирование dhparam.pem в docker-compose.yml и _site.conf ---
+    # --- Uncomment dhparam.pem in docker-compose.yml and _site.conf ---
     if [[ "$CREATE_DHPARAM" == true ]]; then
-        info "Раскомментирую строку dhparam.pem в docker-compose.yml..."
-        # Проект лежит в /var/www/<slug>, прокси — в /var/www/nginxproxy, т.е. путь ../nginxproxy
+        info "Uncommenting the dhparam.pem line in docker-compose.yml..."
+        # The project is in /var/www/<slug>, the proxy in /var/www/nginxproxy, i.e. the path is ../nginxproxy
         sed -i 's|^\s*#\s*-\s*\(\.\./\)\{1,2\}nginxproxy/dhparam\.pem:/etc/ssl/certs/dhparam\.pem.*|      - ../nginxproxy/dhparam.pem:/etc/ssl/certs/dhparam.pem:ro|' "${PROJECT_DIR}/docker-compose.yml"
 
-        info "Раскомментирую строку ssl_dhparam в _site.conf..."
+        info "Uncommenting the ssl_dhparam line in _site.conf..."
         sed -i 's|^\s*#ssl_dhparam /etc/ssl/certs/dhparam\.pem;|        ssl_dhparam /etc/ssl/certs/dhparam.pem;|' "${PROJECT_DIR}/.config/nginx/_site.conf"
     fi
 
-    # --- Создание .htpasswd для Basic Auth ---
+    # --- Create .htpasswd for Basic Auth ---
     if [[ "$ENABLE_BASIC_AUTH" == true ]]; then
-        info "Создаю .htpasswd файл для Basic Authentication..."
+        info "Creating .htpasswd file for Basic Authentication..."
         mkdir -p "${PROJECT_DIR}/.config/nginx"
         docker run --rm httpd:alpine htpasswd -nb "${AUTH_USER}" "${AUTH_PASSWORD}" > "${PROJECT_DIR}/.config/nginx/.htpasswd"
 
         if [[ -s "${PROJECT_DIR}/.config/nginx/.htpasswd" ]]; then
-            info ".htpasswd файл создан: ${PROJECT_DIR}/.config/nginx/.htpasswd"
+            info ".htpasswd file created: ${PROJECT_DIR}/.config/nginx/.htpasswd"
 
-            info "Раскомментирую строку .htpasswd в docker-compose.yml..."
+            info "Uncommenting the .htpasswd line in docker-compose.yml..."
             sed -i 's|^\s*#\s*-\s*\./.config/nginx/\.htpasswd:/etc/nginx/\.htpasswd:ro|      - ./.config/nginx/.htpasswd:/etc/nginx/.htpasswd:ro|' "${PROJECT_DIR}/docker-compose.yml"
 
-            info "Раскомментирую строки Basic Auth в _site.conf..."
+            info "Uncommenting the Basic Auth lines in _site.conf..."
             sed -i 's|^#\s*auth_basic "Restricted Access";|            auth_basic "Restricted Access";|' "${PROJECT_DIR}/.config/nginx/_site.conf"
             sed -i 's|^#\s*auth_basic_user_file /etc/nginx/\.htpasswd;|            auth_basic_user_file /etc/nginx/.htpasswd;|' "${PROJECT_DIR}/.config/nginx/_site.conf"
         else
-            error "Не удалось создать .htpasswd файл"
+            error "Failed to create .htpasswd file"
         fi
     fi
 
-    info "Проект ${SLUG} создан в ${PROJECT_DIR}"
+    info "Project ${SLUG} created in ${PROJECT_DIR}"
 }
 
-# ==================== Создание конфига сайта для nginxproxy ======
+# ==================== Site config creation for nginxproxy ======
 update_proxy_nginx_conf() {
     local SITE_CONF="${PROXY_DIR}/sites/${SLUG}.conf"
     local TEMPLATE="${PROXY_DIR}/site-template.conf"
 
     mkdir -p "${PROXY_DIR}/sites"
 
-    # Копируем шаблон, если его нет
+    # Copy the template if it is missing
     if [[ ! -f "$TEMPLATE" ]]; then
-        info "Копирую site-template.conf в nginxproxy..."
+        info "Copying site-template.conf to nginxproxy..."
         local SOURCE_TEMPLATE="${SCRIPT_DIR}/nginxproxy/site-template.conf"
 
         if [[ ! -f "$SOURCE_TEMPLATE" ]]; then
-            error "Шаблон не найден: ${SOURCE_TEMPLATE}. SCRIPT_DIR=${SCRIPT_DIR}"
+            error "Template not found: ${SOURCE_TEMPLATE}. SCRIPT_DIR=${SCRIPT_DIR}"
         fi
 
         cp "$SOURCE_TEMPLATE" "$TEMPLATE"
     fi
 
-    # Проверяем, смонтирована ли папка sites в docker-compose.yml
+    # Check whether the sites folder is mounted in docker-compose.yml
     if ! grep -q "./sites:/etc/nginx/sites:ro" "${PROXY_DIR}/docker-compose.yml"; then
-        info "Добавляю монтирование папки sites в docker-compose.yml nginxproxy..."
+        info "Adding the sites folder mount to the nginxproxy docker-compose.yml..."
         sed -i '/- \.\/nginx\.conf:\/etc\/nginx\/nginx\.conf:ro/a\      - ./sites:/etc/nginx/sites:ro' "${PROXY_DIR}/docker-compose.yml"
     fi
 
     if [[ -f "$SITE_CONF" ]]; then
-        warn "Конфиг ${SITE_CONF} уже существует, пропускаю."
+        warn "Config ${SITE_CONF} already exists, skipping."
         return
     fi
 
-    info "Создаю конфиг ${SLUG}.conf из шаблона..."
+    info "Creating config ${SLUG}.conf from the template..."
     sed -e "s/SLUG/${SLUG}/g" \
         -e "s/DOMAIN/${DOMAIN}/g" \
         "$TEMPLATE" > "$SITE_CONF"
 
-    info "Конфиг ${SLUG}.conf создан в ${PROXY_DIR}/sites/"
+    info "Config ${SLUG}.conf created in ${PROXY_DIR}/sites/"
 }
 
-# ==================== Обновление nginxproxy/docker-compose.yml
+# ==================== Update nginxproxy/docker-compose.yml
 update_proxy_docker_compose() {
     local DC="${PROXY_DIR}/docker-compose.yml"
 
-    # Проверяем, не добавлен ли уже этот slug в секции networks
+    # Check whether this slug is already in the networks section
     if grep -q "^  ${SLUG}:$" "$DC"; then
-        info "Сеть ${SLUG} уже добавлена в ${DC}"
+        info "Network ${SLUG} is already added to ${DC}"
         return
     fi
 
-    info "Добавляю ${SLUG} в ${DC}..."
+    info "Adding ${SLUG} to ${DC}..."
 
     python3 - "$DC" "$SLUG" <<'PYEOF'
 import sys
 import re
 
 def in_service(lines, idx, name):
-    """Строка idx лежит внутри сервиса name: ближайший выше ключ с отступом 2 — это name"""
+    """Line idx is inside service name: the nearest key above with indent 2 is name"""
     for j in range(idx - 1, -1, -1):
         m = re.match(r'^  ([\w.-]+):', lines[j])
         if m:
@@ -797,26 +797,26 @@ lines = content.splitlines()
 result = []
 i = 0
 
-# Собираем существующие ключи для проверки дубликатов
+# Collect existing keys to check for duplicates
 existing_networks = set()
 existing_volumes = set()
 existing_network_refs = set()
 existing_volume_mounts = set()
 
 for line in lines:
-    # Сети в x-common-networks
+    # Networks in x-common-networks
     match = re.match(r'^\s+-\s+([\w-]+)$', line)
     if match:
         existing_network_refs.add(match.group(1))
-    # Сети на верхнем уровне
+    # Top-level networks
     match = re.match(r'^\s{2}([\w-]+):\s*$', line)
     if match:
         existing_networks.add(match.group(1))
-    # Volumes на верхнем уровне
+    # Top-level volumes
     match = re.match(r'^\s{2}([\w-]+_ssl_certificates):\s*$', line)
     if match:
         existing_volumes.add(match.group(1))
-    # Volume mounts в сервисе
+    # Volume mounts in the service
     match = re.match(r'^\s+-\s+([\w-]+_ssl_certificates):/etc/letsencrypt/', line)
     if match:
         existing_volume_mounts.add(match.group(1))
@@ -824,10 +824,10 @@ for line in lines:
 while i < len(lines):
     line = lines[i]
 
-    # --- x-common-networks: добавляем сеть в список ---
+    # --- x-common-networks: add the network to the list ---
     if line.strip().startswith("networks:") and i > 0 and "x-common-networks" in lines[i-1]:
         if line.strip() == "networks: []":
-            # Заменяем inline-синтаксис на многострочный с новой сетью
+            # Replace the inline syntax with a multi-line one containing the new network
             result.append("  networks:")
             if slug not in existing_network_refs:
                 result.append(f"    - {slug}")
@@ -842,7 +842,7 @@ while i < len(lines):
                 result.append(f"    - {slug}")
         continue
 
-    # --- volumes: в сервисе nginxproxy — добавляем ssl volume ---
+    # --- volumes: in the nginxproxy service — add the ssl volume ---
     if re.match(r'^\s+volumes:\s*$', line) and in_service(lines, i, "nginxproxy"):
         result.append(line)
         i += 1
@@ -854,7 +854,7 @@ while i < len(lines):
             result.append(f"      - {volume_key}:/etc/letsencrypt/{slug}")
         continue
 
-    # --- networks: на верхнем уровне ---
+    # --- networks: top level ---
     if re.match(r'^networks:\s*(\{\})?$', line):
         result.append("networks:")
         i += 1
@@ -867,7 +867,7 @@ while i < len(lines):
             result.append(f"    external: true")
         continue
 
-    # --- volumes: на верхнем уровне ---
+    # --- volumes: top level ---
     if re.match(r'^volumes:\s*(\{\})?$', line):
         result.append("volumes:")
         i += 1
@@ -888,12 +888,12 @@ with open(dc_path, 'w') as f:
     f.write("\n".join(result) + "\n")
 PYEOF
 
-    info "${SLUG} добавлен в docker-compose.yml прокси"
+    info "${SLUG} added to the proxy docker-compose.yml"
 }
 
-# ==================== Комментирование / раскомментирование SSL-блоков ==============
+# ==================== Commenting / uncommenting SSL blocks ==============
 # toggle_ssl_blocks comment|uncomment
-# Работает с server-блоком "listen 443" в _site.conf проекта и в nginxproxy/sites/<slug>.conf
+# Works on the "listen 443" server block in the project _site.conf and in nginxproxy/sites/<slug>.conf
 toggle_ssl_blocks() {
     local MODE="$1"
     local FILES=()
@@ -951,95 +951,95 @@ PYEOF
 
     for FILE in "${FILES[@]}"; do
         if [[ "$MODE" == "comment" ]]; then
-            info "SSL-блок закомментирован в ${FILE}"
+            info "SSL block commented out in ${FILE}"
         else
-            info "SSL-блок раскомментирован в ${FILE}"
+            info "SSL block uncommented in ${FILE}"
         fi
     done
 }
 
 comment_ssl_blocks() {
-    info "Комментирую SSL-блоки до получения сертификата..."
+    info "Commenting out SSL blocks until the certificate is obtained..."
     toggle_ssl_blocks comment
 }
 
 uncomment_ssl_blocks() {
-    info "Раскомментирую SSL-блоки после получения сертификата..."
+    info "Uncommenting SSL blocks after the certificate is obtained..."
     toggle_ssl_blocks uncomment
 }
 
-# ==================== Создание нативной базы данных ==============
+# ==================== Native database creation ==============
 create_native_database() {
     if [[ "$DB_NATIVE" != true ]]; then
         return
     fi
 
-    info "Создаю нативную базу данных ${DB_TYPE}..."
+    info "Creating native ${DB_TYPE} database..."
 
     if [[ "$DB_TYPE" == "postgres" ]]; then
         if ! command -v psql &> /dev/null; then
-            error "PostgreSQL не установлен на сервере. Установите PostgreSQL или используйте контейнерную БД (уберите флаг --db-native)"
+            error "PostgreSQL is not installed on the server. Install PostgreSQL or use a containerized DB (remove the --db-native flag)"
         fi
 
         if ! sudo -u postgres psql -c "SELECT 1;" &> /dev/null; then
-            error "PostgreSQL сервер не запущен или недоступен. Запустите PostgreSQL: sudo systemctl start postgresql"
+            error "PostgreSQL server is not running or unavailable. Start PostgreSQL: sudo systemctl start postgresql"
         fi
 
-        info "Создаю пользователя PostgreSQL: ${DB_POSTGRES_USER}"
+        info "Creating PostgreSQL user: ${DB_POSTGRES_USER}"
         sudo -u postgres psql -c "CREATE USER \"${DB_POSTGRES_USER}\" WITH PASSWORD '${DB_POSTGRES_PASSWORD}';" 2>/dev/null || \
-            warn "Пользователь ${DB_POSTGRES_USER} уже существует"
+            warn "User ${DB_POSTGRES_USER} already exists"
 
-        info "Создаю базу данных PostgreSQL: ${DB_POSTGRES_NAME}"
+        info "Creating PostgreSQL database: ${DB_POSTGRES_NAME}"
         sudo -u postgres psql -c "CREATE DATABASE \"${DB_POSTGRES_NAME}\" OWNER \"${DB_POSTGRES_USER}\";" 2>/dev/null || \
-            warn "База данных ${DB_POSTGRES_NAME} уже существует"
+            warn "Database ${DB_POSTGRES_NAME} already exists"
 
         sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE \"${DB_POSTGRES_NAME}\" TO \"${DB_POSTGRES_USER}\";"
 
-        success "PostgreSQL база данных ${DB_POSTGRES_NAME} создана"
+        success "PostgreSQL database ${DB_POSTGRES_NAME} created"
 
     elif [[ "$DB_TYPE" == "mysql" ]]; then
         if ! command -v mysql &> /dev/null; then
-            error "MySQL не установлен на сервере. Установите MySQL или используйте контейнерную БД (уберите флаг --db-native)"
+            error "MySQL is not installed on the server. Install MySQL or use a containerized DB (remove the --db-native flag)"
         fi
 
         if ! mysql -u root -p"${DB_ROOT_PASSWORD}" -e "SELECT 1;" &> /dev/null; then
-            error "MySQL сервер недоступен или неверный root-пароль. Проверьте: 1) MySQL запущен (sudo systemctl start mysql), 2) Правильность --db-root-password"
+            error "MySQL server is unavailable or the root password is wrong. Check: 1) MySQL is running (sudo systemctl start mysql), 2) --db-root-password is correct"
         fi
 
-        info "Создаю базу данных MySQL: ${DB_MYSQL_NAME}"
+        info "Creating MySQL database: ${DB_MYSQL_NAME}"
         mysql -u root -p"${DB_ROOT_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS \`${DB_MYSQL_NAME}\`;" || \
-            error "Не удалось создать базу данных MySQL. Проверьте root-пароль."
+            error "Failed to create MySQL database. Check the root password."
 
-        # Приложение подключается из контейнера (через Docker bridge), а не с localhost
-        info "Создаю пользователя MySQL: ${DB_MYSQL_USER}"
+        # The application connects from a container (via the Docker bridge), not from localhost
+        info "Creating MySQL user: ${DB_MYSQL_USER}"
         mysql -u root -p"${DB_ROOT_PASSWORD}" -e "CREATE USER IF NOT EXISTS '${DB_MYSQL_USER}'@'%' IDENTIFIED BY '${DB_MYSQL_PASSWORD}';"
         mysql -u root -p"${DB_ROOT_PASSWORD}" -e "GRANT ALL PRIVILEGES ON \`${DB_MYSQL_NAME}\`.* TO '${DB_MYSQL_USER}'@'%';"
         mysql -u root -p"${DB_ROOT_PASSWORD}" -e "FLUSH PRIVILEGES;"
 
-        success "MySQL база данных ${DB_MYSQL_NAME} создана"
+        success "MySQL database ${DB_MYSQL_NAME} created"
     fi
 }
 
-# ==================== Сборка и запуск Docker ==============
+# ==================== Docker build and start ==============
 build_and_start_project() {
-    info "Запускаю сборку и запуск Docker-контейнеров проекта..."
-    cd "${PROJECT_DIR}" || error "Не удалось перейти в директорию ${PROJECT_DIR}"
+    info "Building and starting the project Docker containers..."
+    cd "${PROJECT_DIR}" || error "Failed to change to directory ${PROJECT_DIR}"
 
-    # Создаём внешнюю сеть если её нет
+    # Create the external network if it does not exist
     if ! docker network inspect "${SLUG}" >/dev/null 2>&1; then
-        info "Создаю внешнюю сеть ${SLUG}..."
+        info "Creating external network ${SLUG}..."
         if docker network create "${SLUG}" \
             --label "com.docker.compose.project=${SLUG}" \
             --label "com.docker.compose.network=${SLUG}"; then
-            info "Сеть ${SLUG} успешно создана"
+            info "Network ${SLUG} created successfully"
         else
-            error "Не удалось создать сеть ${SLUG}"
+            error "Failed to create network ${SLUG}"
         fi
     else
-        info "Сеть ${SLUG} уже существует"
+        info "Network ${SLUG} already exists"
     fi
 
-    info "Проверяю и создаю необходимые volumes..."
+    info "Checking and creating required volumes..."
     local VOLUMES=("${SLUG}_ssl_certificates" "${SLUG}_certbot_www" "${SLUG}_redis_data")
     if [[ "$DB_NATIVE" != true ]]; then
         VOLUMES=("${SLUG}_db" "${VOLUMES[@]}")
@@ -1048,92 +1048,92 @@ build_and_start_project() {
     local VOLUME
     for VOLUME in "${VOLUMES[@]}"; do
         if ! docker volume inspect "${VOLUME}" >/dev/null 2>&1; then
-            info "Создаю volume ${VOLUME}..."
+            info "Creating volume ${VOLUME}..."
             docker volume create "${VOLUME}"
         else
-            info "Volume ${VOLUME} уже существует"
+            info "Volume ${VOLUME} already exists"
         fi
     done
 
-    info "Выполняю: docker compose up -d --build"
+    info "Running: docker compose up -d --build"
     if ! docker compose up -d --build; then
-        error "Не удалось собрать/запустить проект. Проверьте логи: cd ${PROJECT_DIR} && docker compose logs"
+        error "Failed to build/start the project. Check the logs: cd ${PROJECT_DIR} && docker compose logs"
     fi
 
-    info "Команда docker compose завершена успешно"
+    info "docker compose command completed successfully"
 
-    # Даём контейнерам время на запуск
-    info "Ожидаю запуска контейнеров..."
+    # Give the containers time to start
+    info "Waiting for containers to start..."
     sleep 10
 
-    info "Проверяю статус контейнеров..."
+    info "Checking container status..."
     local RUNNING
     local ALL
     RUNNING=$(docker ps --filter "name=${SLUG}_" --format "{{.Names}}" | wc -l)
     ALL=$(docker ps -a --filter "name=${SLUG}_" --format "{{.Names}}" | wc -l)
 
-    info "Запущено контейнеров: ${RUNNING} из ${ALL}"
+    info "Running containers: ${RUNNING} of ${ALL}"
 
     if [[ $RUNNING -eq 0 ]]; then
-        warn "Контейнеры не запущены! Проверьте логи:"
+        warn "No containers are running! Check the logs:"
         warn "  cd ${PROJECT_DIR} && docker compose logs"
     else
-        info "Статус контейнеров:"
+        info "Container status:"
         docker ps -a --filter "name=${SLUG}_" --format "table {{.Names}}\t{{.Status}}"
 
-        # Проверяем критичные контейнеры (php, nginx, db)
+        # Check the critical containers (php, nginx, db)
         local CRITICAL_RUNNING
         CRITICAL_RUNNING=$(docker ps --filter "name=${SLUG}_php" --filter "name=${SLUG}_nginx" --filter "name=${SLUG}_db" --format "{{.Names}}" | wc -l)
         if [[ $CRITICAL_RUNNING -ge 2 ]]; then
-            info "Основные контейнеры (php, nginx, db) запущены"
+            info "Main containers (php, nginx, db) are running"
         else
-            warn "Некоторые критичные контейнеры не запустились. Проверьте логи."
+            warn "Some critical containers failed to start. Check the logs."
         fi
     fi
 
     cd "${SCRIPT_DIR}" || true
 }
 
-# ==================== Установка Laravel через composer ==============
+# ==================== Laravel installation via composer ==============
 install_laravel() {
-    info "Устанавливаю Laravel версии ^${LARAVEL_VERSION}..."
-    cd "${PROJECT_DIR}" || error "Не удалось перейти в директорию ${PROJECT_DIR}"
+    info "Installing Laravel version ^${LARAVEL_VERSION}..."
+    cd "${PROJECT_DIR}" || error "Failed to change to directory ${PROJECT_DIR}"
 
-    # Проверяем, не установлен ли уже Laravel (наличие artisan)
+    # Check whether Laravel is already installed (artisan present)
     if [[ -f "${PROJECT_DIR}/public_html/artisan" ]]; then
-        warn "Laravel уже установлен в ${PROJECT_DIR}/public_html/"
-        info "Пропускаю установку Laravel"
+        warn "Laravel is already installed in ${PROJECT_DIR}/public_html/"
+        info "Skipping Laravel installation"
         cd "${SCRIPT_DIR}" || true
         return
     fi
 
-    info "Запускаю: docker compose run --rm composer create-project laravel/laravel:^${LARAVEL_VERSION} ."
+    info "Running: docker compose run --rm composer create-project laravel/laravel:^${LARAVEL_VERSION} ."
 
     if docker compose run --rm composer create-project "laravel/laravel:^${LARAVEL_VERSION}" .; then
-        success "Laravel ^${LARAVEL_VERSION} успешно установлен!"
+        success "Laravel ^${LARAVEL_VERSION} installed successfully!"
 
-        info "Устанавливаю права доступа..."
+        info "Setting permissions..."
         docker compose run --rm permissions
 
-        info "Laravel готов к использованию в ${PROJECT_DIR}/public_html/"
+        info "Laravel is ready to use in ${PROJECT_DIR}/public_html/"
     else
-        error "Не удалось установить Laravel. Проверьте логи выше."
+        error "Failed to install Laravel. Check the logs above."
     fi
 
     cd "${SCRIPT_DIR}" || true
 }
 
-# ==================== Настройка .env файла Laravel ==============
+# ==================== Laravel .env configuration ==============
 configure_laravel_env() {
     local LARAVEL_ENV="${PROJECT_DIR}/public_html/.env"
 
     if [[ ! -f "$LARAVEL_ENV" ]]; then
-        warn ".env файл Laravel не найден: ${LARAVEL_ENV}"
-        info "Пропускаю настройку Laravel .env"
+        warn "Laravel .env file not found: ${LARAVEL_ENV}"
+        info "Skipping Laravel .env configuration"
         return
     fi
 
-    info "Настраиваю .env файл Laravel..."
+    info "Configuring the Laravel .env file..."
 
     local DB_CONNECTION=""
     local DB_HOST=""
@@ -1154,8 +1154,8 @@ configure_laravel_env() {
         DB_PASS="$DB_MYSQL_PASSWORD"
     fi
 
-    # Нативная БД: IP Docker bridge и порт на хосте.
-    # Контейнерная БД: имя контейнера и внутренний порт (внешний порт из .env внутри сети не слушается)
+    # Native DB: Docker bridge IP and the port on the host.
+    # Containerized DB: container name and internal port (the external port from .env is not listened on inside the network)
     if [[ "$DB_NATIVE" == true ]]; then
         DB_HOST="172.17.0.1"
         if [[ "$DB_TYPE" == "postgres" ]]; then DB_PORT_VALUE="$PORT_POSTGRES"; else DB_PORT_VALUE="$PORT_MYSQL"; fi
@@ -1164,7 +1164,7 @@ configure_laravel_env() {
         if [[ "$DB_TYPE" == "postgres" ]]; then DB_PORT_VALUE="5432"; else DB_PORT_VALUE="3306"; fi
     fi
 
-    # Laravel 11+ держит DB_* закомментированными, Laravel 10 — нет; обрабатываем оба варианта
+    # Laravel 11+ keeps DB_* commented out, Laravel 10 does not; handle both cases
     sed -i "s|^#\? *DB_CONNECTION=.*|DB_CONNECTION=${DB_CONNECTION}|" "$LARAVEL_ENV"
     sed -i "s|^#\? *DB_HOST=.*|DB_HOST=${DB_HOST}|" "$LARAVEL_ENV"
     sed -i "s|^#\? *DB_PORT=.*|DB_PORT=${DB_PORT_VALUE}|" "$LARAVEL_ENV"
@@ -1174,7 +1174,7 @@ configure_laravel_env() {
 
     sed -i "s|^APP_URL=.*|APP_URL=https://${DOMAIN}|" "$LARAVEL_ENV"
 
-    info "Параметры БД и APP_URL успешно записаны в ${LARAVEL_ENV}:"
+    info "DB parameters and APP_URL written successfully to ${LARAVEL_ENV}:"
     info "  APP_URL: https://${DOMAIN}"
     info "  DB_CONNECTION: ${DB_CONNECTION}"
     info "  DB_HOST: ${DB_HOST}"
@@ -1182,58 +1182,58 @@ configure_laravel_env() {
     info "  DB_DATABASE: ${DB_NAME}"
     info "  DB_USERNAME: ${DB_USER}"
 
-    info "Выполняю миграции Laravel..."
-    cd "${PROJECT_DIR}" || error "Не удалось перейти в директорию ${PROJECT_DIR}"
+    info "Running Laravel migrations..."
+    cd "${PROJECT_DIR}" || error "Failed to change to directory ${PROJECT_DIR}"
 
     if docker compose run --rm artisan migrate --force 2>&1; then
-        success "Миграции Laravel успешно выполнены"
+        success "Laravel migrations completed successfully"
     else
-        warn "Не удалось выполнить миграции Laravel. Проверьте подключение к БД и выполните миграции вручную:"
+        warn "Failed to run Laravel migrations. Check the DB connection and run the migrations manually:"
         warn "  cd ${PROJECT_DIR} && docker compose run --rm artisan migrate"
     fi
 
     cd "${SCRIPT_DIR}" || true
 }
 
-# ==================== Установка Laravel Filament ==============
+# ==================== Laravel Filament installation ==============
 install_filament() {
     if [[ "$INSTALL_FILAMENT" != true ]]; then
         return
     fi
 
-    info "Устанавливаю Laravel Filament..."
-    cd "${PROJECT_DIR}" || error "Не удалось перейти в директорию ${PROJECT_DIR}"
+    info "Installing Laravel Filament..."
+    cd "${PROJECT_DIR}" || error "Failed to change to directory ${PROJECT_DIR}"
 
-    # Генерируем случайное имя если не указано (8 символов)
+    # Generate a random name if not given (8 characters)
     if [[ -z "$FILAMENT_NAME" ]]; then
         FILAMENT_NAME=$(random_string 'a-f0-9' 8)
-        info "Сгенерировано случайное имя пользователя: ${FILAMENT_NAME}"
+        info "Generated random user name: ${FILAMENT_NAME}"
     fi
 
-    # Генерируем случайный пароль если не указан (10 символов)
+    # Generate a random password if not given (10 characters)
     if [[ -z "$FILAMENT_PASSWORD" ]]; then
         FILAMENT_PASSWORD=$(random_string 'a-zA-Z0-9' 10)
-        info "Сгенерирован случайный пароль: ${FILAMENT_PASSWORD}"
+        info "Generated random password: ${FILAMENT_PASSWORD}"
     fi
 
-    info "Шаг 1/3: Установка пакета Filament..."
+    info "Step 1/3: Installing the Filament package..."
     if docker compose run --rm composer require filament/filament:"^5.0" 2>&1; then
-        success "Пакет Filament успешно установлен"
+        success "Filament package installed successfully"
     else
-        error "Не удалось установить пакет Filament"
+        error "Failed to install the Filament package"
     fi
 
-    info "Шаг 2/3: Установка панели Filament..."
+    info "Step 2/3: Installing the Filament panel..."
     if docker compose run --rm artisan filament:install --panels 2>&1; then
-        success "Панель Filament успешно установлена"
+        success "Filament panel installed successfully"
     else
-        error "Не удалось установить панель Filament"
+        error "Failed to install the Filament panel"
     fi
 
-    info "Шаг 3/3: Создание пользователя Filament..."
+    info "Step 3/3: Creating the Filament user..."
     if docker compose run --rm artisan make:filament-user --name="${FILAMENT_NAME}" --email="${FILAMENT_EMAIL}" --password="${FILAMENT_PASSWORD}" 2>&1; then
-        success "Пользователь Filament успешно создан"
-        info "Данные для входа в Filament:"
+        success "Filament user created successfully"
+        info "Filament login credentials:"
         info "  Email: ${FILAMENT_EMAIL}"
         info "  Name: ${FILAMENT_NAME}"
         info "  Password: ${FILAMENT_PASSWORD}"
@@ -1241,7 +1241,7 @@ install_filament() {
 
         local GLOBAL_ENV="${PROJECT_DIR}/.env"
         if [[ -f "$GLOBAL_ENV" ]]; then
-            info "Сохраняю данные Filament в глобальный .env файл..."
+            info "Saving Filament credentials to the global .env file..."
             {
                 echo ""
                 echo "# Filament Admin Credentials"
@@ -1249,93 +1249,93 @@ install_filament() {
                 echo "FILAMENT_ADMIN_EMAIL=${FILAMENT_EMAIL}"
                 echo "FILAMENT_ADMIN_PASSWORD=${FILAMENT_PASSWORD}"
             } >> "$GLOBAL_ENV"
-            success "Данные Filament сохранены в ${GLOBAL_ENV}"
+            success "Filament credentials saved to ${GLOBAL_ENV}"
         fi
     else
-        error "Не удалось создать пользователя Filament"
+        error "Failed to create the Filament user"
     fi
 
     cd "${SCRIPT_DIR}" || true
 }
 
-# ==================== Получение SSL-сертификата ===========
+# ==================== SSL certificate issuance ===========
 obtain_ssl_certificate() {
     if [[ "$OBTAIN_SSL" != true ]]; then
-        info "Пропускаю получение SSL-сертификата (--no-ssl указан)"
+        info "Skipping SSL certificate issuance (--no-ssl given)"
         return
     fi
 
-    info "Получаю SSL-сертификат для домена ${DOMAIN}..."
-    cd "${PROJECT_DIR}" || error "Не удалось перейти в директорию ${PROJECT_DIR}"
+    info "Obtaining an SSL certificate for domain ${DOMAIN}..."
+    cd "${PROJECT_DIR}" || error "Failed to change to directory ${PROJECT_DIR}"
 
-    # Ошибка certbot не должна обрывать скрипт (set -e) — дальше ещё summary, endpoint, backup
+    # A certbot failure must not abort the script (set -e) — summary, endpoint and backup still follow
     if docker compose run --rm certbot certonly \
         --webroot -w /var/www/certbot \
         -d "${DOMAIN}" \
         --email "${SSL_EMAIL}" \
         --agree-tos \
         --non-interactive; then
-        info "SSL-сертификат успешно получен для ${DOMAIN}!"
+        info "SSL certificate obtained successfully for ${DOMAIN}!"
 
         uncomment_ssl_blocks
 
-        info "Перезапускаю nginx проекта для применения SSL-конфигурации..."
+        info "Restarting the project nginx to apply the SSL configuration..."
         docker compose restart nginx
 
-        info "Перезапускаю nginxproxy для применения SSL-конфигурации..."
-        cd "${PROXY_DIR}" || error "Не удалось перейти в ${PROXY_DIR}"
+        info "Restarting nginxproxy to apply the SSL configuration..."
+        cd "${PROXY_DIR}" || error "Failed to change to ${PROXY_DIR}"
         docker compose restart
 
-        info "SSL-конфигурация успешно применена!"
+        info "SSL configuration applied successfully!"
     else
-        warn "Не удалось получить SSL-сертификат. Проверьте:"
-        warn "  - DNS-записи для ${DOMAIN} указывают на этот сервер"
-        warn "  - Порты 80 и 443 открыты и доступны"
-        warn "  - nginxproxy запущен и работает"
-        warn "  - nginx проекта работает корректно"
+        warn "Failed to obtain an SSL certificate. Check:"
+        warn "  - DNS records for ${DOMAIN} point to this server"
+        warn "  - Ports 80 and 443 are open and reachable"
+        warn "  - nginxproxy is up and running"
+        warn "  - the project nginx is working correctly"
     fi
 
     cd "${SCRIPT_DIR}" || true
 }
 
-# ==================== Перезапуск nginxproxy ===================
+# ==================== nginxproxy restart ===================
 restart_nginxproxy() {
-    info "Перезапускаю nginxproxy для применения изменений..."
-    cd "${PROXY_DIR}" || error "Не удалось перейти в ${PROXY_DIR}"
+    info "Restarting nginxproxy to apply the changes..."
+    cd "${PROXY_DIR}" || error "Failed to change to ${PROXY_DIR}"
 
     if ! docker network inspect "${SLUG}" >/dev/null 2>&1; then
-        warn "Сеть ${SLUG} не найдена. Пропускаю перезапуск nginxproxy."
-        warn "Перезапустите nginxproxy вручную после запуска проекта:"
+        warn "Network ${SLUG} not found. Skipping nginxproxy restart."
+        warn "Restart nginxproxy manually after the project starts:"
         warn "  cd ${PROXY_DIR} && docker compose up -d"
         cd "${SCRIPT_DIR}" || true
         return
     fi
 
     if docker compose up -d; then
-        info "nginxproxy успешно перезапущен"
+        info "nginxproxy restarted successfully"
 
         sleep 3
 
         if docker ps --filter "name=nginxproxy" --format "{{.Names}}" | grep -q "nginxproxy"; then
-            info "nginxproxy работает"
+            info "nginxproxy is running"
         else
-            warn "nginxproxy не запущен. Проверьте логи:"
+            warn "nginxproxy is not running. Check the logs:"
             warn "  cd ${PROXY_DIR} && docker compose logs"
         fi
     else
-        warn "Возникли проблемы при перезапуске nginxproxy. Проверьте конфигурацию."
+        warn "Problems occurred while restarting nginxproxy. Check the configuration."
     fi
 
     cd "${SCRIPT_DIR}" || true
 }
 
-# ==================== Отправка данных проекта на endpoint ====================
+# ==================== Send project data to the endpoint ====================
 send_project_data() {
     if [[ -z "$ENDPOINT" ]]; then
         return
     fi
 
-    info "Отправляю данные проекта на endpoint: ${ENDPOINT}..."
+    info "Sending project data to endpoint: ${ENDPOINT}..."
 
     local DB_PORT_VALUE=""
     local DB_NAME=""
@@ -1406,25 +1406,25 @@ JSONEOF
     RESPONSE_BODY=$(echo "$RESPONSE" | head -n-1)
 
     if [[ "$HTTP_CODE" =~ ^2[0-9][0-9]$ ]]; then
-        success "Данные успешно отправлены на endpoint (HTTP ${HTTP_CODE})"
+        success "Data sent to the endpoint successfully (HTTP ${HTTP_CODE})"
         if [[ -n "$RESPONSE_BODY" ]]; then
-            info "Ответ сервера: ${RESPONSE_BODY}"
+            info "Server response: ${RESPONSE_BODY}"
         fi
     else
-        warn "Не удалось отправить данные на endpoint (HTTP ${HTTP_CODE})"
+        warn "Failed to send data to the endpoint (HTTP ${HTTP_CODE})"
         if [[ -n "$RESPONSE_BODY" ]]; then
-            warn "Ответ сервера: ${RESPONSE_BODY}"
+            warn "Server response: ${RESPONSE_BODY}"
         fi
     fi
 }
 
-# ==================== Создание backup архива проекта ====================
+# ==================== Project backup archive creation ====================
 create_project_backup() {
     if [[ "$CREATE_BACKUP" != true ]]; then
         return
     fi
 
-    info "Создаю backup архив проекта..."
+    info "Creating a project backup archive..."
 
     local TIMESTAMP
     TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -1432,46 +1432,46 @@ create_project_backup() {
 
     ensure_packages zip
 
-    info "Архивирую ${PROJECT_DIR} в ${BACKUP_PATH}..."
-    cd "$(dirname "${PROJECT_DIR}")" || error "Не удалось перейти в родительскую директорию"
+    info "Archiving ${PROJECT_DIR} to ${BACKUP_PATH}..."
+    cd "$(dirname "${PROJECT_DIR}")" || error "Failed to change to the parent directory"
 
     if zip -r -q "${BACKUP_PATH}" "$(basename "${PROJECT_DIR}")"; then
         local BACKUP_SIZE
         BACKUP_SIZE=$(du -h "${BACKUP_PATH}" | cut -f1)
         BACKUP_FILE_PATH="${BACKUP_PATH}"
-        success "Backup архив успешно создан: ${BACKUP_PATH}"
-        info "Размер архива: ${BACKUP_SIZE}"
+        success "Backup archive created successfully: ${BACKUP_PATH}"
+        info "Archive size: ${BACKUP_SIZE}"
 
-        info "Сохраняю путь к backup архиву в .env файл..."
+        info "Saving the backup archive path to the .env file..."
         {
             echo ""
             echo "# Backup Archive"
             echo "BACKUP_ARCHIVE_PATH=${BACKUP_PATH}"
         } >> "${PROJECT_DIR}/.env"
     else
-        error "Не удалось создать backup архив"
+        error "Failed to create the backup archive"
     fi
 
     cd "${SCRIPT_DIR}" || true
 }
 
-# ==================== Вывод итоговой информации ====================
+# ==================== Summary output ====================
 print_summary() {
     echo ""
     echo "============================================================"
-    info "Развёртывание завершено!"
+    info "Deployment completed!"
     echo "============================================================"
     echo ""
-    echo "ПРОЕКТ:"
+    echo "PROJECT:"
     echo "  Slug:           ${SLUG}"
     echo "  Domain:         ${DOMAIN}"
     echo "  Type:           ${APP_TYPE}"
     echo "  Laravel:        ^${LARAVEL_VERSION}"
-    echo "  DB Type:        ${DB_TYPE}$([[ "$DB_NATIVE" == true ]] && echo " (нативная)")"
+    echo "  DB Type:        ${DB_TYPE}$([[ "$DB_NATIVE" == true ]] && echo " (native)")"
     echo "  Project Path:   ${WWW_DIR}/${SLUG}"
     echo "  .env:           ${WWW_DIR}/${SLUG}/.env"
     echo ""
-    echo "ПОРТЫ:"
+    echo "PORTS:"
     echo "  HTTP:           ${PORT_HTTP}"
     echo "  HTTPS:          ${PORT_HTTPS}"
     echo "  PHP-FPM:        ${PORT_PHP}"
@@ -1514,31 +1514,31 @@ print_summary() {
         echo ""
     fi
     echo "============================================================"
-    echo "Следующие шаги:"
+    echo "Next steps:"
     echo "============================================================"
     if [[ "$OBTAIN_SSL" == true ]]; then
-        echo "  1. Перезапустите прокси для применения SSL-сертификата:"
+        echo "  1. Restart the proxy to apply the SSL certificate:"
         echo "       cd ${PROXY_DIR} && docker compose restart"
         echo ""
-        echo "  2. Проверьте доступность сайта:"
+        echo "  2. Check that the site is reachable:"
         echo "       https://${DOMAIN}"
     else
-        echo "  1. Перезапустите прокси:"
+        echo "  1. Restart the proxy:"
         echo "       cd ${PROXY_DIR} && docker compose up -d && docker restart nginxproxy"
         echo ""
-        echo "  2. Получите SSL-сертификат вручную:"
+        echo "  2. Obtain the SSL certificate manually:"
         echo "       cd ${WWW_DIR}/${SLUG} && docker compose run --rm certbot certonly \\"
         echo "         --webroot -w /var/www/certbot -d ${DOMAIN} \\"
         echo "         --email YOUR_EMAIL --agree-tos --non-interactive"
     fi
     echo ""
-    echo "  Проверьте статус контейнеров:"
+    echo "  Check the container status:"
     echo "       cd ${WWW_DIR}/${SLUG} && docker compose ps"
     echo ""
 
     if [[ -n "$BACKUP_FILE_PATH" ]]; then
         echo "BACKUP:"
-        echo "  Архив проекта: ${BACKUP_FILE_PATH}"
+        echo "  Project archive: ${BACKUP_FILE_PATH}"
         echo ""
     fi
 
@@ -1555,10 +1555,10 @@ main() {
 
     check_root
     ensure_www_dir
-    info "Парсинг аргументов..."
+    info "Parsing arguments..."
     parse_args "$@"
     assign_ports
-    info "Аргументы успешно обработаны"
+    info "Arguments processed successfully"
     install_docker
     init_nginxproxy
     create_dhparam

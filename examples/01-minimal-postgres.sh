@@ -2,28 +2,28 @@
 set -euo pipefail
 
 # ============================================================
-# 01-minimal-postgres.sh — минимальное развёртывание с PostgreSQL
+# 01-minimal-postgres.sh — minimal deployment with PostgreSQL
 # ============================================================
-# Сценарий:
-#   Быстро поднять Laravel с PostgreSQL в контейнере. Slug, порты,
-#   имена БД и все пароли генерируются автоматически.
+# Scenario:
+#   Quickly bring up Laravel with PostgreSQL in a container. The slug, ports,
+#   database names and all passwords are generated automatically.
 #
-# Что получится:
-#   - slug вида a3f7k2m9 и домен a3f7k2m9.example.com (slug добавляется
-#     к --domain, потому что --slug не указан);
-#   - /var/www/<slug> с контейнерами php, nginx, db (PostgreSQL 17), redis,
-#     cron и certbot_renew; Laravel ^13.0; сертификат Let's Encrypt;
-#   - учётные данные в /var/www/<slug>/.env и в выводе скрипта.
+# Result:
+#   - a slug like a3f7k2m9 and the domain a3f7k2m9.example.com (the slug is prepended
+#     to --domain because --slug is not given);
+#   - /var/www/<slug> with the containers php, nginx, db (PostgreSQL 17), redis,
+#     cron and certbot_renew; Laravel ^13.0; a Let's Encrypt certificate;
+#   - credentials in /var/www/<slug>/.env and in the script output.
 #
-# Перед запуском поменяйте:
-#   - example.com на свой домен; нужна wildcard-запись *.<домен>,
-#     указывающая на сервер, иначе SSL не получить;
-#   - admin@example.com на реальный email для Let's Encrypt.
+# Before running, change:
+#   - example.com to your own domain; a wildcard record *.<domain> pointing
+#     to the server is required, otherwise SSL cannot be obtained;
+#   - admin@example.com to a real email for Let's Encrypt.
 #
-# Запуск на сервере (из любой папки):
+# Run on the server (from any folder):
 #   bash /opt/laravel-deploy/examples/01-minimal-postgres.sh
-# DEPLOY_DIR по умолчанию — папка laravel-deploy, в которой лежит этот пример
-# (deploy-laravel.sh, laravel/, nginxproxy/). Переопределение:
+# DEPLOY_DIR defaults to the laravel-deploy folder that contains this example
+# (deploy-laravel.sh, laravel/, nginxproxy/). To override:
 #   DEPLOY_DIR=/srv/laravel-deploy bash 01-minimal-postgres.sh
 # ============================================================
 

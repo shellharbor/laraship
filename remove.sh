@@ -1,30 +1,30 @@
 #!/bin/bash
 
 # ============================================================
-# remove.sh — полное удаление проекта
+# remove.sh — full project removal
 # ============================================================
-# Использование:
+# Usage:
 #   sudo bash remove.sh --slug cp --domain cp.lentrade.pro
 #
-# Что делает скрипт:
-#   1. Удаляет все записи из docker-compose.yml в nginxproxy
-#   2. Удаляет конфиг сайта nginxproxy/sites/<slug>.conf
-#   3. Применяет конфигурацию nginxproxy (docker compose up -d)
-#   4. Останавливает контейнеры проекта (docker compose down)
-#   5. Удаляет все volumes проекта
-#   6. Удаляет network проекта
-#   7. Перезагружает nginxproxy (docker restart nginxproxy)
-#   8. Удаляет папку проекта
+# What the script does:
+#   1. Removes all entries from nginxproxy's docker-compose.yml
+#   2. Removes the site config nginxproxy/sites/<slug>.conf
+#   3. Applies the nginxproxy configuration (docker compose up -d)
+#   4. Stops the project containers (docker compose down)
+#   5. Removes all project volumes
+#   6. Removes the project network
+#   7. Restarts nginxproxy (docker restart nginxproxy)
+#   8. Removes the project folder
 #
-# Параметры:
-#   --slug SLUG           Slug проекта (обязательно)
-#   --domain DOMAIN       Домен проекта (обязательно)
-#   --db-root-password P  Root-пароль нативной MySQL (нужен, чтобы удалить её БД и пользователя)
+# Options:
+#   --slug SLUG           Project slug (required)
+#   --domain DOMAIN       Project domain (required)
+#   --db-root-password P  Root password of the native MySQL (needed to drop its database and user)
 # ============================================================
 
 set -euo pipefail
 
-# ==================== Переменные ====================
+# ==================== Variables ====================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WWW_DIR="/var/www"
 PROXY_DIR="${WWW_DIR}/nginxproxy"
@@ -32,7 +32,7 @@ SLUG=""
 DOMAIN=""
 DB_ROOT_PASSWORD=""
 
-# ==================== Цветной вывод ==================
+# ==================== Colored output ==================
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -42,109 +42,109 @@ info()  { echo -e "${GREEN}[INFO]${NC}  $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
-# ==================== Проверка root =================
+# ==================== Root check =================
 check_root() {
     if [[ $EUID -ne 0 ]]; then
-        error "Скрипт должен быть запущен с правами root (sudo)"
+        error "This script must be run as root (sudo)"
     fi
 }
 
-# ==================== Парсинг аргументов ============
+# ==================== Argument parsing ============
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --slug)    SLUG="$2";    shift 2 ;;
             --domain)  DOMAIN="$2";  shift 2 ;;
             --db-root-password) DB_ROOT_PASSWORD="$2"; shift 2 ;;
-            *) error "Неизвестный аргумент: $1" ;;
+            *) error "Unknown argument: $1" ;;
         esac
     done
 
-    [[ -z "$SLUG" ]]   && error "Не указан --slug"
-    [[ -z "$DOMAIN" ]] && error "Не указан --domain"
+    [[ -z "$SLUG" ]]   && error "--slug is required"
+    [[ -z "$DOMAIN" ]] && error "--domain is required"
 
     PROJECT_DIR="${WWW_DIR}/${SLUG}"
     if [[ ! -d "$PROJECT_DIR" ]]; then
-        error "Проект не найден: ${PROJECT_DIR}"
+        error "Project not found: ${PROJECT_DIR}"
     fi
 }
 
-# ==================== Подтверждение удаления ========
+# ==================== Deletion confirmation ========
 confirm_deletion() {
     echo ""
     echo -e "${RED}============================================================${NC}"
-    echo -e "${RED}                   ⚠️  ВНИМАНИЕ! ⚠️${NC}"
+    echo -e "${RED}                   ⚠️  WARNING! ⚠️${NC}"
     echo -e "${RED}============================================================${NC}"
     echo ""
-    echo -e "${YELLOW}Вы собираетесь ПОЛНОСТЬЮ УДАЛИТЬ проект:${NC}"
+    echo -e "${YELLOW}You are about to COMPLETELY REMOVE the project:${NC}"
     echo ""
     echo -e "  Slug:           ${RED}${SLUG}${NC}"
-    echo -e "  Домен:          ${RED}${DOMAIN}${NC}"
-    echo -e "  Путь:           ${RED}${PROJECT_DIR}${NC}"
+    echo -e "  Domain:         ${RED}${DOMAIN}${NC}"
+    echo -e "  Path:           ${RED}${PROJECT_DIR}${NC}"
     echo ""
-    echo -e "${YELLOW}Будет удалено:${NC}"
-    echo "  • Все контейнеры проекта"
-    echo "  • Все volumes (включая данные БД)"
-    echo "  • Network проекта"
-    echo "  • Конфигурация из nginxproxy"
-    echo "  • Backup архив (если существует)"
-    echo "  • Папка проекта со всеми файлами"
+    echo -e "${YELLOW}The following will be removed:${NC}"
+    echo "  • All project containers"
+    echo "  • All volumes (including database data)"
+    echo "  • The project network"
+    echo "  • The nginxproxy configuration"
+    echo "  • The backup archive (if it exists)"
+    echo "  • The project folder with all its files"
     echo ""
-    echo -e "${RED}⚠️  ЭТО ДЕЙСТВИЕ НЕОБРАТИМО! ⚠️${NC}"
+    echo -e "${RED}⚠️  THIS ACTION IS IRREVERSIBLE! ⚠️${NC}"
     echo ""
     echo -e "${RED}============================================================${NC}"
     echo ""
     
-    # Запрашиваем подтверждение
-    read -p "Введите 'yes' для подтверждения удаления: " CONFIRMATION
+    # Ask for confirmation
+    read -p "Type 'yes' to confirm removal: " CONFIRMATION
     
     if [[ "$CONFIRMATION" != "yes" ]]; then
         echo ""
-        info "Удаление отменено пользователем"
+        info "Removal cancelled by user"
         exit 0
     fi
     
     echo ""
-    info "Подтверждение получено. Начинаю удаление..."
+    info "Confirmation received. Starting removal..."
 }
 
-# ==================== Удаление конфига сайта ====
+# ==================== Removing the site config ====
 remove_from_nginx_conf() {
     local SITE_CONF="${PROXY_DIR}/sites/${SLUG}.conf"
 
-    # После deactivate.sh конфиг лежит как <slug>.conf.disabled
+    # After deactivate.sh the config is stored as <slug>.conf.disabled
     if [[ ! -f "$SITE_CONF" && ! -f "${SITE_CONF}.disabled" ]]; then
-        warn "Конфиг ${SITE_CONF} не найден, пропускаю."
+        warn "Config ${SITE_CONF} not found, skipping."
         return
     fi
 
-    info "Удаляю конфиг ${SLUG}.conf..."
+    info "Removing config ${SLUG}.conf..."
 
     rm -f "$SITE_CONF" "${SITE_CONF}.disabled"
     
     if [[ $? -eq 0 ]]; then
-        info "Конфиг ${SLUG}.conf удалён"
+        info "Config ${SLUG}.conf removed"
     else
-        error "Не удалось удалить конфиг ${SLUG}.conf"
+        error "Failed to remove config ${SLUG}.conf"
     fi
 }
 
-# ==================== Удаление из docker-compose.yml ====
+# ==================== Removing from docker-compose.yml ====
 remove_from_docker_compose() {
     local COMPOSE_FILE="${PROXY_DIR}/docker-compose.yml"
     
     if [[ ! -f "$COMPOSE_FILE" ]]; then
-        error "Файл docker-compose.yml не найден: ${COMPOSE_FILE}"
+        error "docker-compose.yml not found: ${COMPOSE_FILE}"
     fi
     
-    info "Удаляю записи ${SLUG} из docker-compose.yml..."
+    info "Removing ${SLUG} entries from docker-compose.yml..."
     
     python3 - "${COMPOSE_FILE}" "${SLUG}" <<'PYEOF'
 import sys
 import re
 
 def in_service(lines, idx, name):
-    """Строка idx лежит внутри сервиса name: ближайший выше ключ с отступом 2 — это name"""
+    """Line idx is inside service name: the nearest key above with indent 2 is name"""
     for j in range(idx - 1, -1, -1):
         m = re.match(r'^  ([\w.-]+):', lines[j])
         if m:
@@ -157,8 +157,8 @@ compose_file = sys.argv[1]
 slug = sys.argv[2]
 
 def is_slug_item(line):
-    """Точное совпадение элемента списка ("- lms", "# - lms", "- lms_ssl_certificates:/...") —
-    подстрока задела бы и другие проекты (lms → lms2)"""
+    """Exact match of a list item ("- lms", "# - lms", "- lms_ssl_certificates:/...") —
+    a substring would also hit other projects (lms → lms2)"""
     s = line.strip().lstrip('#').strip()
     if s.startswith('-'):
         s = s[1:].strip()
@@ -174,31 +174,31 @@ i = 0
 while i < len(lines):
     line = lines[i]
     
-    # Удаляем сеть из x-common-networks
+    # Remove the network from x-common-networks
     if line.strip().startswith("networks:") and i > 0 and "x-common-networks" in lines[i-1]:
-        # Проверяем, используется ли inline-синтаксис networks: []
+        # Check whether the inline networks: [] syntax is used
         if line.strip() == "networks: []":
-            # Оставляем как есть - пустой массив
+            # Leave as is - empty array
             result.append(line)
             i += 1
         else:
             result.append(line)
             i += 1
-            # Собираем сети, пропуская нужную
+            # Collect the networks, skipping the target one
             remaining_networks = []
             while i < len(lines) and lines[i].strip().startswith("-"):
                 if not is_slug_item(lines[i]):
                     remaining_networks.append(lines[i])
                 i += 1
-            # Если не осталось сетей, заменяем на inline-синтаксис
+            # If no networks remain, switch to inline syntax
             if not remaining_networks:
-                # Удаляем предыдущую строку "networks:" и добавляем "networks: []"
+                # Remove the previous "networks:" line and add "networks: []"
                 result[-1] = "  networks: []"
             else:
                 result.extend(remaining_networks)
         continue
     
-    # Удаляем volume из сервиса nginxproxy
+    # Remove the volume from the nginxproxy service
     if re.match(r'^\s+volumes:\s*$', line) and in_service(lines, i, "nginxproxy"):
         result.append(line)
         i += 1
@@ -208,55 +208,55 @@ while i < len(lines):
             i += 1
         continue
     
-    # Удаляем network на верхнем уровне
+    # Remove the top-level network
     if re.match(r'^networks:\s*$', line):
         i += 1
         remaining_items = []
         while i < len(lines):
-            # Проверяем, не началась ли новая секция верхнего уровня
+            # Check whether a new top-level section has started
             if lines[i] and not lines[i].startswith(' '):
                 break
-            # Если это блок с нужным slug
+            # If this is the block for the target slug
             if lines[i].strip().startswith(f"{slug}:"):
-                # Пропускаем весь блок сети (включая дочерние элементы)
+                # Skip the whole network block (including child items)
                 i += 1
                 while i < len(lines) and lines[i].startswith('    '):
                     i += 1
             else:
                 remaining_items.append(lines[i])
                 i += 1
-        # Если остались элементы, добавляем секцию networks:
+        # If items remain, add the networks: section
         if remaining_items:
             result.append("networks:")
             result.extend(remaining_items)
         else:
-            # Если не осталось элементов, добавляем пустой mapping
+            # If no items remain, add an empty mapping
             result.append("networks: {}")
         continue
     
-    # Удаляем volume на верхнем уровне
+    # Remove the top-level volume
     if re.match(r'^volumes:\s*$', line):
         i += 1
         remaining_items = []
         while i < len(lines):
-            # Проверяем, не началась ли новая секция верхнего уровня
+            # Check whether a new top-level section has started
             if lines[i] and not lines[i].startswith(' '):
                 break
-            # Если это блок с нужным slug
+            # If this is the block for the target slug
             if lines[i].strip().startswith(f"{slug}_ssl_certificates:"):
-                # Пропускаем весь блок volume (включая дочерние элементы)
+                # Skip the whole volume block (including child items)
                 i += 1
                 while i < len(lines) and lines[i].startswith('    '):
                     i += 1
             else:
                 remaining_items.append(lines[i])
                 i += 1
-        # Если остались элементы, добавляем секцию volumes:
+        # If items remain, add the volumes: section
         if remaining_items:
             result.append("volumes:")
             result.extend(remaining_items)
         else:
-            # Если не осталось элементов, добавляем пустой mapping
+            # If no items remain, add an empty mapping
             result.append("volumes: {}")
         continue
     
@@ -266,259 +266,259 @@ while i < len(lines):
 with open(compose_file, 'w') as f:
     f.write("\n".join(result) + "\n")
 
-print(f"Записи {slug} удалены из docker-compose.yml")
+print(f"Entries for {slug} removed from docker-compose.yml")
 PYEOF
 
     if [[ $? -eq 0 ]]; then
-        info "docker-compose.yml успешно обновлён"
+        info "docker-compose.yml updated successfully"
     else
-        error "Не удалось обновить docker-compose.yml"
+        error "Failed to update docker-compose.yml"
     fi
 }
 
-# ==================== Применение конфигурации nginxproxy ====
+# ==================== Applying the nginxproxy configuration ====
 apply_proxy_config() {
-    info "Применяю конфигурацию nginxproxy..."
-    cd "${PROXY_DIR}" || error "Не удалось перейти в ${PROXY_DIR}"
+    info "Applying nginxproxy configuration..."
+    cd "${PROXY_DIR}" || error "Failed to change directory to ${PROXY_DIR}"
     
     docker compose up -d
     
     if [[ $? -eq 0 ]]; then
-        info "Конфигурация nginxproxy применена"
+        info "nginxproxy configuration applied"
     else
-        warn "Возникли проблемы при применении конфигурации nginxproxy"
+        warn "Problems occurred while applying the nginxproxy configuration"
     fi
     
     cd "${SCRIPT_DIR}" || true
 }
 
-# ==================== Остановка контейнеров проекта =
+# ==================== Stopping the project containers =
 stop_project_containers() {
-    info "Останавливаю контейнеры проекта ${SLUG}..."
-    cd "${PROJECT_DIR}" || error "Не удалось перейти в ${PROJECT_DIR}"
+    info "Stopping containers of project ${SLUG}..."
+    cd "${PROJECT_DIR}" || error "Failed to change directory to ${PROJECT_DIR}"
     
     docker compose down
     
     if [[ $? -eq 0 ]]; then
-        info "Контейнеры проекта ${SLUG} остановлены"
+        info "Containers of project ${SLUG} stopped"
     else
-        warn "Возникли проблемы при остановке контейнеров"
+        warn "Problems occurred while stopping the containers"
     fi
     
     cd "${SCRIPT_DIR}" || true
 }
 
-# ==================== Удаление volumes проекта =======
+# ==================== Removing the project volumes =======
 remove_project_volumes() {
-    info "Удаляю volumes проекта ${SLUG}..."
+    info "Removing volumes of project ${SLUG}..."
     
-    # Получаем список volumes из docker-compose.yml проекта
-    cd "${PROJECT_DIR}" || error "Не удалось перейти в ${PROJECT_DIR}"
+    # Get the list of volumes from the project's docker-compose.yml
+    cd "${PROJECT_DIR}" || error "Failed to change directory to ${PROJECT_DIR}"
     
     local VOLUMES=$(grep -E "^  ${SLUG}_" docker-compose.yml | sed 's/://g' | awk '{print $1}' || true)
     
     if [[ -z "$VOLUMES" ]]; then
-        info "Volumes не найдены в docker-compose.yml"
+        info "No volumes found in docker-compose.yml"
     else
         for volume in $VOLUMES; do
-            info "Удаляю volume: ${volume}"
-            docker volume rm "${volume}" 2>/dev/null || warn "Volume ${volume} не найден или уже удалён"
+            info "Removing volume: ${volume}"
+            docker volume rm "${volume}" 2>/dev/null || warn "Volume ${volume} not found or already removed"
         done
-        info "Все volumes проекта удалены"
+        info "All project volumes removed"
     fi
     
     cd "${SCRIPT_DIR}" || true
 }
 
-# ==================== Удаление network проекта =======
+# ==================== Removing the project network =======
 remove_project_network() {
-    info "Удаляю network проекта ${SLUG}..."
+    info "Removing network of project ${SLUG}..."
     
-    docker network rm "${SLUG}" 2>/dev/null || warn "Network ${SLUG} не найден или уже удалён"
+    docker network rm "${SLUG}" 2>/dev/null || warn "Network ${SLUG} not found or already removed"
     
-    info "Network проекта удалён"
+    info "Project network removed"
 }
 
-# ==================== Перезагрузка nginxproxy ========
+# ==================== Restarting nginxproxy ========
 restart_nginxproxy() {
-    info "Перезагружаю nginxproxy..."
+    info "Restarting nginxproxy..."
     
     docker restart nginxproxy
     
     if [[ $? -eq 0 ]]; then
-        info "nginxproxy успешно перезагружен"
+        info "nginxproxy restarted successfully"
     else
-        warn "Возникли проблемы при перезагрузке nginxproxy"
+        warn "Problems occurred while restarting nginxproxy"
     fi
 }
 
-# ==================== Удаление нативной БД ===========
+# ==================== Removing the native database ===========
 remove_native_database() {
-    # Проверяем наличие .env файла проекта
+    # Check that the project's .env file exists
     local ENV_FILE="${PROJECT_DIR}/.env"
     if [[ ! -f "$ENV_FILE" ]]; then
-        info "Файл .env не найден, пропускаю проверку нативной БД"
+        info "No .env file found, skipping the native database check"
         return
     fi
     
-    # Читаем переменные из .env безопасно (избегаем проблем со спецсимволами)
+    # Read variables from .env safely (avoids problems with special characters)
     set -a
     while IFS='=' read -r key value; do
-        # Пропускаем пустые строки и комментарии
+        # Skip empty lines and comments
         [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
-        # Удаляем возможные пробелы вокруг ключа
+        # Strip any whitespace around the key
         key=$(echo "$key" | xargs)
-        # Проверяем что ключ не пустой после обработки
+        # Check that the key is not empty after processing
         [[ -z "$key" ]] && continue
-        # Экспортируем переменную
+        # Export the variable
         export "$key=$value"
     done < "$ENV_FILE"
     set +a
     
-    # Проект без БД (HTML)
+    # Project without a database (HTML)
     if [[ -z "${DB_POSTGRES_NAME:-}" && -z "${DB_MYSQL_NAME:-}" ]]; then
-        info "Проект без БД, пропускаю удаление нативной БД"
+        info "Project has no database, skipping native database removal"
         return
     fi
 
-    # Проверяем, используется ли нативная БД
-    # Способ 1: флаг DB_NATIVE (его пишут все deploy-скрипты)
+    # Check whether a native database is used
+    # Method 1: the DB_NATIVE flag (written by all deploy scripts)
     local IS_NATIVE=false
     if [[ "${DB_NATIVE:-}" == "true" ]]; then
         IS_NATIVE=true
     fi
 
-    # Способ 2: флага нет (старые проекты) — смотрим, есть ли сервис БД в docker-compose.yml.
-    # deploy переименовывает сервис в "db", поэтому ищем db, db_postgres и db_mysql
+    # Method 2: no flag (older projects) — check whether docker-compose.yml has a DB service.
+    # deploy renames the service to "db", so look for db, db_postgres and db_mysql
     if [[ -z "${DB_NATIVE:-}" && -f "${PROJECT_DIR}/docker-compose.yml" ]]; then
         if ! grep -qE '^  db(_postgres|_mysql)?:' "${PROJECT_DIR}/docker-compose.yml" 2>/dev/null; then
             IS_NATIVE=true
-            info "Обнаружена нативная БД (отсутствует db контейнер в docker-compose.yml)"
+            info "Native database detected (no db container in docker-compose.yml)"
         fi
     fi
     
     if [[ "$IS_NATIVE" != true ]]; then
-        info "Проект использует контейнерную БД, пропускаю удаление нативной БД"
+        info "Project uses a containerized database, skipping native database removal"
         return
     fi
     
-    info "Обнаружена нативная база данных, удаляю..."
+    info "Native database detected, removing..."
     
-    # Определяем тип БД по наличию переменных
+    # Determine the database type from which variables are present
     if [[ -n "${DB_POSTGRES_NAME:-}" ]]; then
-        # Удаляем PostgreSQL базу данных и пользователя
-        info "Удаляю PostgreSQL базу данных: ${DB_POSTGRES_NAME}"
+        # Drop the PostgreSQL database and user
+        info "Removing PostgreSQL database: ${DB_POSTGRES_NAME}"
         
         if command -v psql &> /dev/null; then
-            # Отключаем все активные соединения
+            # Terminate all active connections
             sudo -u postgres psql -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${DB_POSTGRES_NAME}';" 2>/dev/null || true
             
-            # Удаляем базу данных
+            # Drop the database
             sudo -u postgres psql -c "DROP DATABASE IF EXISTS \"${DB_POSTGRES_NAME}\";" 2>/dev/null && \
-                info "База данных ${DB_POSTGRES_NAME} удалена" || \
-                warn "Не удалось удалить базу данных ${DB_POSTGRES_NAME}"
+                info "Database ${DB_POSTGRES_NAME} removed" || \
+                warn "Failed to remove database ${DB_POSTGRES_NAME}"
             
-            # Удаляем пользователя
+            # Drop the user
             sudo -u postgres psql -c "DROP USER IF EXISTS \"${DB_POSTGRES_USER:-}\";" 2>/dev/null && \
-                info "Пользователь ${DB_POSTGRES_USER:-} удалён" || \
-                warn "Не удалось удалить пользователя ${DB_POSTGRES_USER:-}"
+                info "User ${DB_POSTGRES_USER:-} removed" || \
+                warn "Failed to remove user ${DB_POSTGRES_USER:-}"
         else
-            warn "PostgreSQL не установлен, пропускаю удаление БД"
+            warn "PostgreSQL is not installed, skipping database removal"
         fi
         
     elif [[ -n "${DB_MYSQL_NAME:-}" ]]; then
-        # Удаляем MySQL базу данных и пользователя
-        info "Удаляю MySQL базу данных: ${DB_MYSQL_NAME}"
+        # Drop the MySQL database and user
+        info "Removing MySQL database: ${DB_MYSQL_NAME}"
 
         if command -v mysql &> /dev/null; then
-            # Root-пароль системной MySQL в .env не хранится — его передают через --db-root-password
+            # The system MySQL root password is not stored in .env — it is passed via --db-root-password
             local ROOT_PW="${DB_ROOT_PASSWORD:-}"
             if [[ -n "$ROOT_PW" ]]; then
-                # Удаляем базу данных
+                # Drop the database
                 mysql -u root -p"${ROOT_PW}" -e "DROP DATABASE IF EXISTS \`${DB_MYSQL_NAME}\`;" 2>/dev/null && \
-                    info "База данных ${DB_MYSQL_NAME} удалена" || \
-                    warn "Не удалось удалить базу данных ${DB_MYSQL_NAME}"
+                    info "Database ${DB_MYSQL_NAME} removed" || \
+                    warn "Failed to remove database ${DB_MYSQL_NAME}"
 
-                # Удаляем пользователя (deploy создаёт 'user'@'%', старые версии — 'user'@'localhost')
+                # Drop the user (deploy creates 'user'@'%', older versions — 'user'@'localhost')
                 mysql -u root -p"${ROOT_PW}" -e "DROP USER IF EXISTS '${DB_MYSQL_USER:-}'@'%', '${DB_MYSQL_USER:-}'@'localhost';" 2>/dev/null && \
-                    info "Пользователь ${DB_MYSQL_USER:-} удалён" || \
-                    warn "Не удалось удалить пользователя ${DB_MYSQL_USER:-}"
+                    info "User ${DB_MYSQL_USER:-} removed" || \
+                    warn "Failed to remove user ${DB_MYSQL_USER:-}"
 
                 mysql -u root -p"${ROOT_PW}" -e "FLUSH PRIVILEGES;" 2>/dev/null || true
             else
-                warn "Root-пароль MySQL не указан (--db-root-password), БД не удалена. Удалите вручную:"
+                warn "MySQL root password not provided (--db-root-password), database not removed. Remove it manually:"
                 warn "  DROP DATABASE \`${DB_MYSQL_NAME}\`; DROP USER '${DB_MYSQL_USER:-}'@'%';"
             fi
         else
-            warn "MySQL не установлен, пропускаю удаление БД"
+            warn "MySQL is not installed, skipping database removal"
         fi
     fi
 }
 
-# ==================== Удаление backup архива =========
+# ==================== Removing the backup archive =========
 remove_backup_archive() {
-    # Проверяем наличие .env файла проекта
+    # Check that the project's .env file exists
     local ENV_FILE="${PROJECT_DIR}/.env"
     if [[ ! -f "$ENV_FILE" ]]; then
-        info "Файл .env не найден, пропускаю проверку backup архива"
+        info "No .env file found, skipping the backup archive check"
         return
     fi
     
-    # Читаем путь к backup архиву из .env
+    # Read the backup archive path from .env
     local BACKUP_ARCHIVE_PATH=$(grep "^BACKUP_ARCHIVE_PATH=" "$ENV_FILE" 2>/dev/null | cut -d'=' -f2)
     
     if [[ -z "$BACKUP_ARCHIVE_PATH" ]]; then
-        info "Путь к backup архиву не найден в .env, пропускаю удаление"
+        info "Backup archive path not found in .env, skipping removal"
         return
     fi
     
-    # Проверяем существование архива и удаляем его
+    # Check that the archive exists and remove it
     if [[ -f "$BACKUP_ARCHIVE_PATH" ]]; then
-        info "Удаляю backup архив: ${BACKUP_ARCHIVE_PATH}"
+        info "Removing backup archive: ${BACKUP_ARCHIVE_PATH}"
         rm -f "$BACKUP_ARCHIVE_PATH"
         
         if [[ $? -eq 0 ]]; then
-            info "Backup архив успешно удалён"
+            info "Backup archive removed successfully"
         else
-            warn "Не удалось удалить backup архив: ${BACKUP_ARCHIVE_PATH}"
+            warn "Failed to remove backup archive: ${BACKUP_ARCHIVE_PATH}"
         fi
     else
-        info "Backup архив не найден по пути: ${BACKUP_ARCHIVE_PATH}"
+        info "Backup archive not found at: ${BACKUP_ARCHIVE_PATH}"
     fi
 }
 
-# ==================== Удаление папки проекта =========
+# ==================== Removing the project folder =========
 remove_project_directory() {
-    info "Удаляю папку проекта ${PROJECT_DIR}..."
+    info "Removing project folder ${PROJECT_DIR}..."
     
     rm -rf "${PROJECT_DIR}"
     
     if [[ $? -eq 0 ]]; then
-        info "Папка проекта удалена"
+        info "Project folder removed"
     else
-        error "Не удалось удалить папку проекта"
+        error "Failed to remove project folder"
     fi
 }
 
-# ==================== Вывод итоговой информации =====
+# ==================== Summary output =====
 print_summary() {
     echo ""
     echo "============================================================"
-    info "Удаление проекта завершено!"
+    info "Project removal completed!"
     echo "============================================================"
     echo ""
-    echo "ПРОЕКТ: ${SLUG}"
-    echo "  Домен:          ${DOMAIN}"
-    echo "  Статус:         ПОЛНОСТЬЮ УДАЛЁН"
+    echo "PROJECT: ${SLUG}"
+    echo "  Domain:         ${DOMAIN}"
+    echo "  Status:         COMPLETELY REMOVED"
     echo ""
-    echo "Что было удалено:"
-    echo "  ✓ Конфигурация nginxproxy/sites/${SLUG}.conf"
-    echo "  ✓ Записи из nginxproxy/docker-compose.yml"
-    echo "  ✓ Контейнеры проекта остановлены"
-    echo "  ✓ Все volumes проекта удалены"
-    echo "  ✓ Network проекта удалён"
-    echo "  ✓ Backup архив (если существовал)"
-    echo "  ✓ Папка проекта ${PROJECT_DIR} удалена"
+    echo "What was removed:"
+    echo "  ✓ nginxproxy/sites/${SLUG}.conf configuration"
+    echo "  ✓ Entries from nginxproxy/docker-compose.yml"
+    echo "  ✓ Project containers stopped"
+    echo "  ✓ All project volumes removed"
+    echo "  ✓ Project network removed"
+    echo "  ✓ Backup archive (if it existed)"
+    echo "  ✓ Project folder ${PROJECT_DIR} removed"
     echo ""
     echo "============================================================"
     echo ""
@@ -529,7 +529,7 @@ main() {
     check_root
     parse_args "$@"
     
-    # Запрашиваем подтверждение удаления
+    # Ask for deletion confirmation
     confirm_deletion
     
     remove_from_docker_compose

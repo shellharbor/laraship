@@ -2,46 +2,46 @@
 set -euo pipefail
 
 # ============================================================
-# 10-production-full.sh — production: всё явно, Filament, endpoint, backup
+# 10-production-full.sh — production: everything explicit, Filament, endpoint, backup
 # ============================================================
-# Сценарий:
-#   Боевой сайт, где все параметры воспроизводимы, а данные проекта
-#   отправляются во внешнюю систему учёта.
+# Scenario:
+#   A live site where all parameters are reproducible and the project data
+#   is sent to an external accounting system.
 #
-# Что получится:
-#   - https://app.example.com на Laravel ^13.0 (версия зафиксирована явно)
-#     с PostgreSQL в контейнере app_db (БД app_prod);
-#   - фиксированные порты хоста: 8200/4200/9200/6600/5600;
-#   - панель Filament https://app.example.com/admin;
-#   - JSON с данными проекта, включая пароли, отправлен PUT-запросом на
-#     https://api.example.com/deployments (пример тела: endpoint-payload.json);
-#   - архив /tmp/app_<YYYYmmdd_HHMMSS>.zip; путь дописан в .env как
-#     BACKUP_ARCHIVE_PATH. Данных БД в архиве нет, это только папка проекта.
+# Result:
+#   - https://app.example.com on Laravel ^13.0 (version pinned explicitly)
+#     with PostgreSQL in the app_db container (DB app_prod);
+#   - fixed host ports: 8200/4200/9200/6600/5600;
+#   - the Filament panel https://app.example.com/admin;
+#   - JSON with the project data, including passwords, is sent by a PUT request to
+#     https://api.example.com/deployments (example body: endpoint-payload.json);
+#   - the archive /tmp/app_<YYYYmmdd_HHMMSS>.zip; its path is appended to .env as
+#     BACKUP_ARCHIVE_PATH. The archive contains no DB data, only the project folder.
 #
-# После развёртывания вручную:
-#   - в /var/www/app/public_html/.env выставить APP_ENV=production и
-#     APP_DEBUG=false, затем выполнить docker compose run --rm artisan config:cache.
-#     Для Filament в production модель User должна реализовать
+# After deployment, manually:
+#   - in /var/www/app/public_html/.env set APP_ENV=production and
+#     APP_DEBUG=false, then run docker compose run --rm artisan config:cache.
+#     For Filament in production, the User model must implement
 #     FilamentUser::canAccessPanel();
-#   - закрыть фаерволом всё, кроме 80/443: порты 8200/4200/6600/5600
-#     опубликованы на всех интерфейсах (PHP-FPM 9200 — только на 127.0.0.1),
-#     а Docker обходит ufw;
+#   - block everything except 80/443 with a firewall: ports 8200/4200/6600/5600
+#     are published on all interfaces (PHP-FPM 9200 only on 127.0.0.1),
+#     and Docker bypasses ufw;
 #   - chmod 600 /var/www/app/.env.
 #
-# --create-dhparam сюда не добавлен: в текущем шаблоне он не включает
-# ssl_dhparam (см. README → «Известные ограничения»).
+# --create-dhparam is not added here: in the current template it does not enable
+# ssl_dhparam (see README → "Known limitations").
 #
-# Перед запуском поменяйте:
-#   - slug, домен, оба email и URL endpoint;
-#   - все пароли ChangeMe_* (символы A-Za-z0-9@%_+-; в JSON они уходят
-#     без экранирования);
-#   - порты, если они заняты;
-#   - проверьте совместимость Filament 5 с выбранной версией Laravel.
+# Before running, change:
+#   - the slug, domain, both emails and the endpoint URL;
+#   - all ChangeMe_* passwords (characters A-Za-z0-9@%_+-; in the JSON they are sent
+#     without escaping);
+#   - the ports, if they are taken;
+#   - check that Filament 5 is compatible with the chosen Laravel version.
 #
-# Запуск на сервере (из любой папки):
+# Run on the server (from any folder):
 #   bash /opt/laravel-deploy/examples/10-production-full.sh
-# DEPLOY_DIR по умолчанию — папка laravel-deploy, в которой лежит этот пример
-# (deploy-laravel.sh, laravel/, nginxproxy/). Переопределение:
+# DEPLOY_DIR defaults to the laravel-deploy folder that contains this example
+# (deploy-laravel.sh, laravel/, nginxproxy/). To override:
 #   DEPLOY_DIR=/srv/laravel-deploy bash 10-production-full.sh
 # ============================================================
 

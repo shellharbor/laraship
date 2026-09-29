@@ -2,19 +2,19 @@
 set -euo pipefail
 
 # ============================================================
-# 09-no-ssl.sh — развёртывание без получения сертификата (--no-ssl)
+# 09-no-ssl.sh — deployment without obtaining a certificate (--no-ssl)
 # ============================================================
-# Сценарий:
-#   DNS ещё не переключён на сервер, а проект и БД нужно подготовить
-#   заранее. Сертификат получают позже вручную. --ssl-email не нужен.
+# Scenario:
+#   DNS has not been switched to the server yet, but the project and DB need to be
+#   prepared in advance. The certificate is obtained later, manually. --ssl-email is not needed.
 #
-# Что получится:
-#   - проект, контейнеры, Laravel и БД готовы;
-#   - HTTPS-блоки в _site.conf и nginxproxy/sites/preview.conf
-#     закомментированы. HTTP-блок отдаёт только /.well-known/acme-challenge/,
-#     поэтому САЙТ НЕДОСТУПЕН, пока не будет получен сертификат.
+# Result:
+#   - the project, containers, Laravel and DB are ready;
+#   - the HTTPS blocks in _site.conf and nginxproxy/sites/preview.conf are
+#     commented out. The HTTP block serves only /.well-known/acme-challenge/,
+#     so THE SITE IS UNAVAILABLE until a certificate is obtained.
 #
-# Когда DNS заработает (выполнять на сервере):
+# Once DNS works (run on the server):
 #   cd /var/www/preview
 #   docker compose run --rm certbot certonly --webroot -w /var/www/certbot \
 #     -d preview.example.com --email admin@example.com --agree-tos --non-interactive
@@ -22,12 +22,12 @@ set -euo pipefail
 #   docker compose exec nginx nginx -t && docker compose restart nginx
 #   cd /var/www/nginxproxy && docker compose restart
 #
-# Перед запуском поменяйте: slug и домен.
+# Before running, change: the slug and domain.
 #
-# Запуск на сервере (из любой папки):
+# Run on the server (from any folder):
 #   bash /opt/laravel-deploy/examples/09-no-ssl.sh
-# DEPLOY_DIR по умолчанию — папка laravel-deploy, в которой лежит этот пример
-# (deploy-laravel.sh, laravel/, nginxproxy/). Переопределение:
+# DEPLOY_DIR defaults to the laravel-deploy folder that contains this example
+# (deploy-laravel.sh, laravel/, nginxproxy/). To override:
 #   DEPLOY_DIR=/srv/laravel-deploy bash 09-no-ssl.sh
 # ============================================================
 

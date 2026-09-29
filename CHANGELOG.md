@@ -1,21 +1,21 @@
 # Changelog
 
-После каждой задачи с изменениями файлов кратко записывайте, что и зачем изменилось: функции, исправления, внутренние работы, зависимости, документацию и AI-KIT. Новые записи держите в `Unreleased` до подтверждённого выпуска; даты и версии заполняйте по факту. Для задачи без изменений файлов запись не нужна.
+After every task that changes files, briefly record what changed and why: features, fixes, internal work, dependencies, documentation and AI-KIT. Keep new entries under `Unreleased` until a release is confirmed; fill in dates and versions only when they are known. A task with no file changes needs no entry.
 
 ## Unreleased
 
 ### AI-KIT
 
-- v0.1: добавлены инструкции агентам, контекст, skill, стековые и инженерные правила, маршрутизация моделей и bootstrap prompt.
-- Сводка доступного голосового контекста, тонкие адаптеры, реестр skills и стековые skills; восстановлены пользовательские Laravel-договорённости из прежней AI-Kit задачи.
-- Добавлено правило проверки Docker daemon и запроса пользователю запустить его для контейнерных задач.
-- Добавлен универсальный `.gitignore` для PHP/Laravel/Moodle/Go, артефактов разработки, секретов и локального AI-KIT.
-- В `.gitignore` добавлены локальные каталоги Go cache и файлы `*.out`.
-- Уточнена политика `composer.lock`: по умолчанию хранится для приложений, опциональное исключение для библиотек.
-- Уточнено, что `go.mod` и `go.sum` остаются под Git для Go-модулей.
-- Добавлены правила и skill для Python скриптов; `.gitignore` исключает виртуальные окружения, кеши, покрытие и сборочные артефакты, сохраняя конфигурацию и lock-файлы под Git.
-- Уточнено обязательное обновление `CHANGELOG.md` после каждой задачи с изменениями файлов, чтобы сохранять историю причин и результата, включая внутренние изменения и сам kit.
+- v0.1: added agent instructions, context, skill, stack and engineering rules, model routing and the bootstrap prompt.
+- Summary of the available voice context, thin adapters, a skills registry and stack skills; restored the user's Laravel conventions from the earlier AI-Kit task.
+- Added a rule to check the Docker daemon and ask the user to start it for container tasks.
+- Added a universal `.gitignore` for PHP/Laravel/Moodle/Go, development artifacts, secrets and the local AI-KIT.
+- Added local Go cache directories and `*.out` files to `.gitignore`.
+- Clarified the `composer.lock` policy: committed by default for applications, with an optional exception for libraries.
+- Clarified that `go.mod` and `go.sum` stay under Git for Go modules.
+- Added rules and a skill for Python scripts; `.gitignore` excludes virtual environments, caches, coverage and build artifacts while keeping configuration and lock files under Git.
+- Clarified the mandatory `CHANGELOG.md` update after every task that changes files, so the history keeps both the reason and the result, including internal changes and the kit itself.
 
-### Проект
+### Project
 
-- Пока нет подтверждённых изменений.
+- No confirmed changes yet.

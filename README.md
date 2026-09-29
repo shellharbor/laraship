@@ -1,6 +1,6 @@
-# deploy-laravel.sh — deploy Laravel (+ Filament) with Docker
+# LaraShip — deploy Laravel with Docker
 
-**English** · [Русский](README-ru.md)
+![Laraship deploy Laravel with Docker Bash script](https://i.postimg.cc/Vv1vG8nL/laraship-hero-banner.jpg)
 
 [![Lint](https://github.com/shellharbor/laraship/actions/workflows/lint.yml/badge.svg)](https://github.com/shellharbor/laraship/actions/workflows/lint.yml)
 [![Tests](https://github.com/shellharbor/laraship/actions/workflows/tests.yml/badge.svg)](https://github.com/shellharbor/laraship/actions/workflows/tests.yml)
@@ -9,9 +9,7 @@
 
 `deploy-laravel.sh` deploys a Laravel site, optionally with the Filament admin panel, on an Ubuntu server. Every site runs in its own set of Docker containers, and traffic is accepted by a shared reverse proxy, `nginxproxy`. The script installs Docker, creates the project from the `laravel/` template, installs Laravel, sets up PostgreSQL or MySQL (in a container or native on the host) and obtains a Let's Encrypt SSL certificate.
 
-> **Note:** the scripts print their messages and errors in Russian. This document quotes the original strings where they matter (for example, in error messages), with the meaning explained.
-
-The `laravel-deploy` folder is self-contained: it holds the deploy script, templates, management utilities, examples and a skill for Claude Code. Copy it to the server as a whole (for example, to `/opt/laravel-deploy/`) and run the scripts **on the server as root**. From your workstation (for example, Windows) connect to the server over SSH.
+The `laraship` folder is self-contained: it holds the deploy script, templates, management utilities, examples and a skill for Claude Code. Copy it to the server as a whole (for example, to `/opt/laraship/`) and run the scripts **on the server as root**. From your workstation (for example, Windows) connect to the server over SSH.
 
 ---
 
@@ -43,7 +41,7 @@ The `laravel-deploy` folder is self-contained: it holds the deploy script, templ
 ## Folder contents
 
 ```
-laravel-deploy/
+laraship/
 ├── deploy-laravel.sh              # deploys Laravel (+ Filament); help: --help
 ├── activate.sh                    # re-enable a deactivated project
 ├── deactivate.sh                  # switch a project off without deleting it
@@ -61,9 +59,7 @@ laravel-deploy/
 ├── examples/                      # ready-made launch scenarios (see examples/README.md)
 ├── tests/                         # bats tests and the local sandbox runner
 ├── README.md                      # this file (English documentation)
-├── README-ru.md                   # Russian documentation
 ├── .gitignore
-└── .claude/skills/deploy-laravel/SKILL.md   # Claude Code skill
 ```
 
 The script looks for the `laravel/` and `nginxproxy/` templates next to itself, so the folder must be moved as a whole. `examples/`, `README.md`, `tests/` and `.claude/` are not required on the server, but they do no harm.
@@ -152,34 +148,34 @@ The `artisan`, `composer`, `npm` and `permissions` utilities have no profile. Be
 
 ### 1. Copy the folder to the server
 
-Copy the `laravel-deploy` folder **as a whole**, for example to `/opt/laravel-deploy/`. The script looks for the `laravel/` and `nginxproxy/` templates next to itself, including the hidden `laravel/.config/` and `laravel/.docker/`. The layout is described in [Folder contents](#folder-contents).
+Copy the `laraship` folder **as a whole**, for example to `/opt/laraship/`. The script looks for the `laravel/` and `nginxproxy/` templates next to itself, including the hidden `laravel/.config/` and `laravel/.docker/`. The layout is described in [Folder contents](#folder-contents).
 
-From your workstation (PowerShell or Git Bash), from the directory that contains `laravel-deploy`:
+From your workstation (PowerShell or Git Bash), from the directory that contains `laraship`:
 
 ```bash
 # if you have SSH access as root
-scp -r laravel-deploy root@server:/opt/
+scp -r laraship root@server:/opt/
 
 # as a regular user with sudo
-scp -r laravel-deploy user@server:~/
-ssh user@server 'sudo rm -rf /opt/laravel-deploy && sudo mv ~/laravel-deploy /opt/'
+scp -r laraship user@server:~/
+ssh user@server 'sudo rm -rf /opt/laraship && sudo mv ~/laraship /opt/'
 ```
 
-You can also put the folder into a separate git repository and run `git clone` on the server into `/opt/laravel-deploy`.
+You can also put the folder into a separate git repository and run `git clone` on the server into `/opt/laraship`.
 
 If the files passed through Windows, check the line endings. With CRLF, bash fails with `$'\r': command not found`:
 
 ```bash
-grep -c $'\r' /opt/laravel-deploy/deploy-laravel.sh      # should be 0
+grep -c $'\r' /opt/laraship/deploy-laravel.sh      # should be 0
 # fix:
-sudo find /opt/laravel-deploy -type f \( -name '*.sh' -o -name '*.yml' -o -name '*.conf' -o -name '*Dockerfile' \) \
+sudo find /opt/laraship -type f \( -name '*.sh' -o -name '*.yml' -o -name '*.conf' -o -name '*Dockerfile' \) \
   -exec sed -i 's/\r$//' {} +
 ```
 
 ### 2. Run it
 
 ```bash
-sudo bash /opt/laravel-deploy/deploy-laravel.sh \
+sudo bash /opt/laraship/deploy-laravel.sh \
   --slug shop \
   --domain shop.example.com \
   --db-type postgres \
@@ -191,14 +187,14 @@ Ports, passwords and database credentials that are not given explicitly are gene
 Flag reference (root is not needed):
 
 ```bash
-bash /opt/laravel-deploy/deploy-laravel.sh --help
+bash /opt/laraship/deploy-laravel.sh --help
 ```
 
 ---
 
 ## Arguments
 
-The table follows `parse_args` and the `--help` header of the script. An unknown flag produces the error `Неизвестный аргумент` ("Unknown argument").
+The table follows `parse_args` and the `--help` header of the script. An unknown flag produces the error `Unknown argument`.
 
 ### Required
 
@@ -447,12 +443,12 @@ Important:
 
 ## Examples
 
-Ready-made scripts with these scenarios are in [examples/](examples/README.md). By default they call `deploy-laravel.sh` from their own `laravel-deploy` folder, so they run from anywhere: `bash /opt/laravel-deploy/examples/02-mysql-explicit-slug.sh`. The examples use `example.com` and fake `ChangeMe_...` passwords. If the folder is not at `/opt/laravel-deploy`, fix the path in the commands below.
+Ready-made scripts with these scenarios are in [examples/](examples/README.md). By default they call `deploy-laravel.sh` from their own `laraship` folder, so they run from anywhere: `bash /opt/laraship/examples/02-mysql-explicit-slug.sh`. The examples use `example.com` and fake `ChangeMe_...` passwords. If the folder is not at `/opt/laraship`, fix the path in the commands below.
 
 ### 1. Minimal: PostgreSQL, generated slug
 
 ```bash
-sudo bash /opt/laravel-deploy/deploy-laravel.sh \
+sudo bash /opt/laraship/deploy-laravel.sh \
   --domain example.com \
   --db-type postgres \
   --ssl-email admin@example.com
@@ -463,7 +459,7 @@ sudo bash /opt/laravel-deploy/deploy-laravel.sh \
 ### 2. MySQL with an explicit slug
 
 ```bash
-sudo bash /opt/laravel-deploy/deploy-laravel.sh \
+sudo bash /opt/laraship/deploy-laravel.sh \
   --slug shop \
   --domain shop.example.com \
   --db-type mysql \
@@ -474,7 +470,7 @@ sudo bash /opt/laravel-deploy/deploy-laravel.sh \
 ### 3. Explicit DB credentials and ports
 
 ```bash
-sudo bash /opt/laravel-deploy/deploy-laravel.sh \
+sudo bash /opt/laraship/deploy-laravel.sh \
   --slug crm \
   --domain crm.example.com \
   --db-type postgres \
@@ -496,7 +492,7 @@ sudo bash /opt/laravel-deploy/deploy-laravel.sh \
 ### 4. Native PostgreSQL
 
 ```bash
-sudo bash /opt/laravel-deploy/deploy-laravel.sh \
+sudo bash /opt/laraship/deploy-laravel.sh \
   --slug blog \
   --domain blog.example.com \
   --db-type postgres \
@@ -510,7 +506,7 @@ sudo bash /opt/laravel-deploy/deploy-laravel.sh \
 ### 5. Native MySQL
 
 ```bash
-sudo bash /opt/laravel-deploy/deploy-laravel.sh \
+sudo bash /opt/laraship/deploy-laravel.sh \
   --slug wiki \
   --domain wiki.example.com \
   --db-type mysql \
@@ -526,7 +522,7 @@ sudo bash /opt/laravel-deploy/deploy-laravel.sh \
 ### 6. Filament with generated name and password
 
 ```bash
-sudo bash /opt/laravel-deploy/deploy-laravel.sh \
+sudo bash /opt/laraship/deploy-laravel.sh \
   --slug cms \
   --domain cms.example.com \
   --db-type postgres \
@@ -540,7 +536,7 @@ sudo bash /opt/laravel-deploy/deploy-laravel.sh \
 ### 7. Filament with explicit administrator data
 
 ```bash
-sudo bash /opt/laravel-deploy/deploy-laravel.sh \
+sudo bash /opt/laraship/deploy-laravel.sh \
   --slug backoffice \
   --domain backoffice.example.com \
   --db-type mysql \
@@ -555,7 +551,7 @@ sudo bash /opt/laravel-deploy/deploy-laravel.sh \
 ### 8. Basic Auth (closed staging)
 
 ```bash
-sudo bash /opt/laravel-deploy/deploy-laravel.sh \
+sudo bash /opt/laraship/deploy-laravel.sh \
   --slug staging \
   --domain staging.example.com \
   --db-type postgres \
@@ -570,7 +566,7 @@ sudo bash /opt/laravel-deploy/deploy-laravel.sh \
 ### 9. Without SSL (`--no-ssl`)
 
 ```bash
-sudo bash /opt/laravel-deploy/deploy-laravel.sh \
+sudo bash /opt/laraship/deploy-laravel.sh \
   --slug preview \
   --domain preview.example.com \
   --db-type postgres \
@@ -582,7 +578,7 @@ sudo bash /opt/laravel-deploy/deploy-laravel.sh \
 ### 10. Production: full set + endpoint + backup
 
 ```bash
-sudo bash /opt/laravel-deploy/deploy-laravel.sh \
+sudo bash /opt/laraship/deploy-laravel.sh \
   --slug app \
   --domain app.example.com \
   --laravel-version 13.0 \
@@ -697,12 +693,12 @@ docker system df                # disk usage
 
 ## Project management
 
-The utilities live in the `laravel-deploy` folder next to `deploy-laravel.sh`, require root and work with `/var/www`. They **do not depend** on the project type: you can manage any project on the server with them, including Moodle or HTML deployed by another kit. The slug is compared exactly in all utilities: `lms` does not affect `lms2`.
+The utilities live in the `laraship` folder next to `deploy-laravel.sh`, require root and work with `/var/www`. They **do not depend** on the project type: you can manage any project on the server with them, including Moodle or HTML deployed by another kit. The slug is compared exactly in all utilities: `lms` does not affect `lms2`.
 
 ### `list-projects.sh` — list projects
 
 ```bash
-sudo bash /opt/laravel-deploy/list-projects.sh
+sudo bash /opt/laraship/list-projects.sh
 ```
 
 The script shows every `/var/www/*` folder that has a `docker-compose.yml` (except `nginxproxy`). For each it prints the domain (`SITE_HOST`), container status (RUNNING/STOPPED), presence of an SSL certificate (it checks `live/<domain>/fullchain.pem` in the `<slug>_ssl_certificates` volume), DB type and port, HTTP, HTTPS and PHP ports, the first 5 containers and command hints. At the end: the nginxproxy status and the number of configs in `sites/`.
@@ -710,7 +706,7 @@ The script shows every `/var/www/*` folder that has a `docker-compose.yml` (exce
 ### `deactivate.sh` — switch off without deleting
 
 ```bash
-sudo bash /opt/laravel-deploy/deactivate.sh --slug <slug>
+sudo bash /opt/laraship/deactivate.sh --slug <slug>
 ```
 
 Steps:
@@ -724,7 +720,7 @@ Data, volumes and the project folder are kept.
 ### `activate.sh` — switch back on
 
 ```bash
-sudo bash /opt/laravel-deploy/activate.sh --slug <slug>
+sudo bash /opt/laraship/activate.sh --slug <slug>
 ```
 
 Steps:
@@ -737,9 +733,9 @@ Steps:
 ### `remove.sh` — complete removal
 
 ```bash
-sudo bash /opt/laravel-deploy/remove.sh --slug <slug> --domain <domain>
+sudo bash /opt/laraship/remove.sh --slug <slug> --domain <domain>
 # project with native MySQL: the root password is needed to remove its DB and user
-sudo bash /opt/laravel-deploy/remove.sh --slug <slug> --domain <domain> --db-root-password '<root-password>'
+sudo bash /opt/laraship/remove.sh --slug <slug> --domain <domain> --db-root-password '<root-password>'
 ```
 
 `--slug` and `--domain` are required, and `--domain` is used only in messages. The script prints a warning and **asks you to type `yes`**; any other answer cancels the removal. After confirmation the steps are:
@@ -848,7 +844,7 @@ Notes:
 
 ## Troubleshooting / FAQ
 
-### Migrations failed (`Не удалось выполнить миграции Laravel` — "Failed to run Laravel migrations")
+### Migrations failed (`Failed to run Laravel migrations`)
 
 This is only a warning, the script continues. But with `--install-filament` it terminates at `make:filament-user`. Possible causes:
 - the DB did not finish initializing: after `up` the script waits only 10 seconds, and the first MySQL initialization can take longer;
@@ -957,13 +953,13 @@ Servers deployed with an old version, without the proxy's `nginx.conf` fix, reje
 
 ## Migrating from the old deploy.sh
 
-The generic `deploy.sh --type <type>` was replaced by separate kits; for Laravel it is the `laravel-deploy` folder with the `deploy-laravel.sh` script. The flags stayed the same: change the script path and drop `--type`.
+The generic `deploy.sh --type <type>` was replaced by separate kits; for Laravel it is the `laraship` folder with the `deploy-laravel.sh` script. The flags stayed the same: change the script path and drop `--type`.
 
 ```bash
 # Before
 sudo bash deploy.sh --type laravel --domain example.com --db-type postgres --ssl-email admin@example.com
 # After
-sudo bash /opt/laravel-deploy/deploy-laravel.sh --domain example.com --db-type postgres --ssl-email admin@example.com
+sudo bash /opt/laraship/deploy-laravel.sh --domain example.com --db-type postgres --ssl-email admin@example.com
 ```
 
 For compatibility `--type laravel` is accepted and ignored. With any other value the script exits with a hint about which `deploy-<type>.sh` is needed.
@@ -1000,7 +996,7 @@ The management utilities were fixed as well:
 
 ## Updating an already deployed server
 
-The script does not overwrite an existing `/var/www/nginxproxy` or already created projects. To get the fixes on a server deployed with an old version, perform the steps below. Template paths are given for `/opt/laravel-deploy`.
+The script does not overwrite an existing `/var/www/nginxproxy` or already created projects. To get the fixes on a server deployed with an old version, perform the steps below. Template paths are given for `/opt/laraship`.
 
 **1. The shared proxy.** This step is done once per server and affects all sites.
 - In `/var/www/nginxproxy/nginx.conf`, add the line `client_max_body_size 2048m;` to the `http { … }` block.
@@ -1018,7 +1014,7 @@ The script does not overwrite an existing `/var/www/nginxproxy` or already creat
 - `cron`: `dockerfile: php82.Dockerfile` → `php83.Dockerfile`.
 - Copy the updated Dockerfiles with the built-in composer:
   ```bash
-  cp /opt/laravel-deploy/laravel/.docker/php/php8*.Dockerfile /var/www/<slug>/.docker/php/
+  cp /opt/laraship/laravel/.docker/php/php8*.Dockerfile /var/www/<slug>/.docker/php/
   cd /var/www/<slug> && docker compose up -d --build
   ```
 
@@ -1053,7 +1049,7 @@ E2E_DB=mysql E2E_FILAMENT=0 bash tests/run-local.sh e2e    # MySQL, no Filament
 bash tests/run-local.sh all
 ```
 
-The e2e parameters are set through environment variables: `E2E_DB` (`postgres`|`mysql`), `E2E_FILAMENT` (`1`|`0`), `E2E_LARAVEL` (for example `12.0`; empty means the script's default version), `E2E_SSL` (`1` requests a certificate without DNS and checks that the script only warns). The sandbox image cache lives in the `laravel-deploy-tests-docker` volume.
+The e2e parameters are set through environment variables: `E2E_DB` (`postgres`|`mysql`), `E2E_FILAMENT` (`1`|`0`), `E2E_LARAVEL` (for example `12.0`; empty means the script's default version), `E2E_SSL` (`1` requests a certificate without DNS and checks that the script only warns). The sandbox image cache lives in the `laraship-tests-docker` volume.
 
 > **Do not run `tests/e2e.bats` on a live server.** It writes to `/var/www`, takes ports 80/443 and creates Docker resources. Without `E2E_ALLOW=1` the test refuses to start.
 

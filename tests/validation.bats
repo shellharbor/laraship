@@ -1,74 +1,74 @@
 #!/usr/bin/env bats
-# Валидация аргументов: скрипт обязан отказать до любых изменений в системе.
-# Нужен root, потому что check_root выполняется раньше parse_args.
+# Argument validation: the script must refuse before any change to the system.
+# Root is required because check_root runs before parse_args.
 
 load helpers
 
 setup() { require_root; }
 
-@test "нет --domain" {
+@test "no --domain" {
     run_deploy --db-type postgres --no-ssl
-    assert_rejected "Не указан --domain"
+    assert_rejected "--domain is not specified"
 }
 
-@test "нет --db-type" {
+@test "no --db-type" {
     run_deploy --domain x.test --no-ssl
-    assert_rejected "Не указан --db-type"
+    assert_rejected "--db-type is not specified"
 }
 
-@test "неверный --db-type" {
+@test "invalid --db-type" {
     run_deploy --domain x.test --db-type oracle --no-ssl
-    assert_rejected "Тип БД должен быть 'postgres' или 'mysql'"
+    assert_rejected "DB type must be 'postgres' or 'mysql'"
 }
 
-@test "нет --ssl-email без --no-ssl" {
+@test "no --ssl-email without --no-ssl" {
     run_deploy --domain x.test --db-type postgres
-    assert_rejected "необходимо указать --ssl-email"
+    assert_rejected "--ssl-email is required"
 }
 
-@test "Filament без --filament-email" {
+@test "Filament without --filament-email" {
     run_deploy --domain x.test --db-type postgres --no-ssl --install-filament
-    assert_rejected "необходимо указать --filament-email"
+    assert_rejected "--filament-email is required"
 }
 
-@test "нативная MySQL без --db-root-password" {
+@test "native MySQL without --db-root-password" {
     run_deploy --domain x.test --db-type mysql --db-native --no-ssl
-    assert_rejected "необходимо указать --db-root-password"
+    assert_rejected "--db-root-password is required"
 }
 
-@test "недопустимый slug" {
+@test "invalid slug" {
     run_deploy --slug "bad slug!" --domain x.test --db-type postgres --no-ssl
-    assert_rejected "Недопустимый slug"
+    assert_rejected "Invalid slug"
 }
 
-@test "недопустимый домен" {
+@test "invalid domain" {
     run_deploy --slug okslug --domain "bad_domain" --db-type postgres --no-ssl
-    assert_rejected "Недопустимый домен"
+    assert_rejected "Invalid domain"
 }
 
-@test "Laravel ниже 10.0" {
+@test "Laravel below 10.0" {
     run_deploy --slug okslug --domain x.test --db-type postgres --no-ssl --laravel-version 9.0
-    assert_rejected "Минимальная поддерживаемая версия Laravel"
+    assert_rejected "Minimum supported Laravel version"
 }
 
-@test "неверный формат версии Laravel" {
+@test "invalid Laravel version format" {
     run_deploy --slug okslug --domain x.test --db-type postgres --no-ssl --laravel-version 12
-    assert_rejected "Неверный формат версии Laravel"
+    assert_rejected "Invalid Laravel version format"
 }
 
-@test "неизвестный аргумент" {
+@test "unknown argument" {
     run_deploy --bogus
-    assert_rejected "Неизвестный аргумент"
+    assert_rejected "Unknown argument"
 }
 
-@test "без --slug slug генерируется, а домен получает префикс" {
-    # Доходим до проверки версии, чтобы увидеть сгенерированный slug, и отказываем.
+@test "without --slug a slug is generated and the domain gets a prefix" {
+    # Get as far as the version check to see the generated slug, then be rejected.
     run_deploy --domain x.test --db-type postgres --no-ssl --laravel-version 9.0
-    [[ "${output}" == *"Сгенерирован slug:"* ]]
-    [[ "${output}" == *"Обновлён домен:"*".x.test"* ]]
+    [[ "${output}" == *"Generated slug:"* ]]
+    [[ "${output}" == *"Domain updated:"*".x.test"* ]]
 }
 
-@test "ошибки валидации ничего не создают в /var/www" {
+@test "validation errors create nothing in /var/www" {
     before="$(find /var/www -mindepth 1 -maxdepth 1 2>/dev/null | sort)"
     run_deploy --slug shouldnotexist --domain x.test --db-type oracle --no-ssl
     after="$(find /var/www -mindepth 1 -maxdepth 1 2>/dev/null | sort)"

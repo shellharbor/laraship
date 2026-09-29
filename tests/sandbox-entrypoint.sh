@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Точка входа песочницы: поднимает внутренний dockerd, копирует репозиторий и
-# запускает выбранный набор тестов.
-#   unit  — shellcheck + static.bats + validation.bats (быстро, без Docker-деплоя)
-#   e2e   — реальное развёртывание и жизненный цикл (долго, качает образы)
-#   all   — unit, затем e2e
+# Sandbox entrypoint: starts the inner dockerd, copies the repository and runs the
+# selected test suite.
+#   unit  - shellcheck + static.bats + validation.bats (fast, no Docker deployment)
+#   e2e   - real deployment and lifecycle (slow, pulls images)
+#   all   - unit, then e2e
 set -euo pipefail
 
 MODE="${1:-unit}"
@@ -16,15 +16,15 @@ start_dockerd() {
         docker info >/dev/null 2>&1 && return 0
         sleep 1
     done
-    echo "dockerd не запустился:" >&2
+    echo "dockerd did not start:" >&2
     tail -n 30 /var/log/dockerd.log >&2
     exit 1
 }
 
-# Кэш-volume хранит контейнеры прошлых прогонов (nginxproxy с restart: always).
-# При старте демона они оживают и создают пустые bind-mount каталоги в /var/www,
-# из-за чего скрипт пропускает инициализацию nginxproxy. Начинаем с чистого листа,
-# сохраняя только образы (кэш сборки).
+# The cache volume keeps containers from earlier runs (nginxproxy with restart: always).
+# When the daemon starts they come back to life and create empty bind-mount
+# directories in /var/www, which makes the script skip the nginxproxy initialization.
+# Start from a clean slate, keeping only the images (the build cache).
 reset_state() {
     docker ps -aq | xargs -r docker rm -f >/dev/null 2>&1 || true
     docker network prune -f >/dev/null 2>&1 || true
@@ -34,7 +34,7 @@ reset_state() {
 
 run_unit() {
     echo "==> shellcheck"
-    # SC2155 (declare and assign separately) — стилистика в remove.sh, известна и исключена.
+    # SC2155 (declare and assign separately) is a style issue in remove.sh: known and excluded.
     (cd "${WORK}" && shellcheck -S warning -e SC2155 deploy-laravel.sh activate.sh deactivate.sh remove.sh list-projects.sh)
     echo "==> bats: static + validation"
     bats --print-output-on-failure "${WORK}/tests/static.bats" "${WORK}/tests/validation.bats"
@@ -54,5 +54,5 @@ case "${MODE}" in
     unit) run_unit ;;
     e2e)  run_e2e ;;
     all)  run_unit; run_e2e ;;
-    *)    echo "режим: unit | e2e | all" >&2; exit 2 ;;
+    *)    echo "mode: unit | e2e | all" >&2; exit 2 ;;
 esac

@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
-# Локальный запуск тестов в изолированной песочнице (нужен только Docker).
+# Run the tests locally in an isolated sandbox (only Docker is needed).
 #
-#   bash tests/run-local.sh            # unit: shellcheck + статика + валидация аргументов
-#   bash tests/run-local.sh e2e        # реальный деплой Laravel (PostgreSQL + Filament)
+#   bash tests/run-local.sh            # unit: shellcheck + static checks + argument validation
+#   bash tests/run-local.sh e2e        # real Laravel deployment (PostgreSQL + Filament)
 #   E2E_DB=mysql E2E_FILAMENT=0 bash tests/run-local.sh e2e
 #   bash tests/run-local.sh all
 #
-# Песочница работает с --privileged и своим Docker-демоном: контейнеры, сети и порты
-# 80/443 создаются внутри неё, Docker хоста не затрагивается. Кэш образов лежит в
-# volume laravel-deploy-tests-docker (удалить: docker volume rm laravel-deploy-tests-docker).
+# The sandbox runs with --privileged and its own Docker daemon: containers, networks
+# and ports 80/443 are created inside it, the host's Docker is not affected. The image
+# cache lives in the laravel-deploy-tests-docker volume (remove it with:
+# docker volume rm laravel-deploy-tests-docker).
 set -euo pipefail
 
 MODE="${1:-unit}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Git Bash на Windows: не даём MSYS переписывать пути и берём Windows-путь для -v.
+# Git Bash on Windows: keep MSYS from rewriting paths and use the Windows path for -v.
 export MSYS_NO_PATHCONV=1
 MOUNT="${ROOT}"
 if command -v cygpath >/dev/null 2>&1; then

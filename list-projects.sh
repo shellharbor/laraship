@@ -1,11 +1,11 @@
 #!/bin/bash
 #
-# Скрипт для вывода списка всех развёрнутых проектов в /var/www
+# Script that lists all deployed projects in /var/www
 #
 
 set -euo pipefail
 
-# Цвета для вывода
+# Output colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 
 WWW_DIR="/var/www"
 
-# Функция для вывода информации
+# Function for printing information
 info() {
     echo -e "${CYAN}[INFO]${NC}  $1"
 }
@@ -32,63 +32,63 @@ success() {
     echo -e "${GREEN}[OK]${NC}    $1"
 }
 
-# Проверка прав root
+# Root check
 if [[ $EUID -ne 0 ]]; then
-   error "Этот скрипт должен быть запущен с правами root (sudo)"
+   error "This script must be run as root (sudo)"
    exit 1
 fi
 
-# Заголовок
+# Header
 echo ""
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  Список развёрнутых проектов${NC}"
+echo -e "${BLUE}  Deployed projects${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
-# Проверка существования директории
+# Check that the directory exists
 if [[ ! -d "$WWW_DIR" ]]; then
-    error "Директория ${WWW_DIR} не существует"
+    error "Directory ${WWW_DIR} does not exist"
     exit 1
 fi
 
-# Счётчик проектов
+# Project counter
 PROJECT_COUNT=0
 RUNNING_COUNT=0
 
-# Сканируем директории в /var/www (исключая nginxproxy)
+# Scan directories in /var/www (excluding nginxproxy)
 for PROJECT_DIR in "${WWW_DIR}"/*; do
-    # Пропускаем если это не директория
+    # Skip if it is not a directory
     if [[ ! -d "$PROJECT_DIR" ]]; then
         continue
     fi
     
-    # Получаем имя проекта (slug)
+    # Get the project name (slug)
     SLUG=$(basename "$PROJECT_DIR")
     
-    # Пропускаем nginxproxy
+    # Skip nginxproxy
     if [[ "$SLUG" == "nginxproxy" ]]; then
         continue
     fi
     
-    # Проверяем наличие docker-compose.yml
+    # Check that docker-compose.yml exists
     if [[ ! -f "${PROJECT_DIR}/docker-compose.yml" ]]; then
         continue
     fi
     
     PROJECT_COUNT=$((PROJECT_COUNT + 1))
     
-    # Получаем домен из .env
+    # Get the domain from .env
     DOMAIN="N/A"
     if [[ -f "${PROJECT_DIR}/.env" ]]; then
         DOMAIN=$(grep "^SITE_HOST=" "${PROJECT_DIR}/.env" 2>/dev/null | cut -d'=' -f2 || echo "N/A")
     fi
     
-    # Получаем порты из .env
+    # Get the ports from .env
     PORT_HTTP=$(grep "^SITE_PORT_HTTP=" "${PROJECT_DIR}/.env" 2>/dev/null | cut -d'=' -f2 || echo "N/A")
     PORT_HTTPS=$(grep "^SITE_PORT_HTTPS=" "${PROJECT_DIR}/.env" 2>/dev/null | cut -d'=' -f2 || echo "N/A")
     PORT_PHP=$(grep "^PHP_PORT=" "${PROJECT_DIR}/.env" 2>/dev/null | cut -d'=' -f2 || echo "N/A")
     
-    # Получаем тип БД
+    # Get the database type
     DB_TYPE="N/A"
     if grep -q "^DB_POSTGRES_NAME=" "${PROJECT_DIR}/.env" 2>/dev/null; then
         DB_TYPE="PostgreSQL"
@@ -100,13 +100,13 @@ for PROJECT_DIR in "${WWW_DIR}"/*; do
         DB_PORT="N/A"
     fi
     
-    # Проверяем статус контейнеров
+    # Check the container status
     cd "$PROJECT_DIR" || continue
     
     TOTAL_CONTAINERS=$(docker compose ps -a --format "{{.Name}}" 2>/dev/null | wc -l)
     RUNNING_CONTAINERS=$(docker compose ps --format "{{.Name}}" --status running 2>/dev/null | wc -l)
     
-    # Определяем статус проекта
+    # Determine the project status
     if [[ $RUNNING_CONTAINERS -gt 0 ]]; then
         STATUS="${GREEN}RUNNING${NC} (${RUNNING_CONTAINERS}/${TOTAL_CONTAINERS})"
         RUNNING_COUNT=$((RUNNING_COUNT + 1))
@@ -116,64 +116,64 @@ for PROJECT_DIR in "${WWW_DIR}"/*; do
         STATUS="${RED}NO CONTAINERS${NC}"
     fi
     
-    # Проверяем наличие SSL сертификата (он лежит в docker volume <slug>_ssl_certificates)
+    # Check for an SSL certificate (stored in the docker volume <slug>_ssl_certificates)
     SSL_STATUS="${RED}NO${NC}"
     SSL_VOLUME_DIR=$(docker volume inspect -f '{{.Mountpoint}}' "${SLUG}_ssl_certificates" 2>/dev/null || true)
     if [[ -n "$SSL_VOLUME_DIR" && -e "${SSL_VOLUME_DIR}/live/${DOMAIN}/fullchain.pem" ]]; then
         SSL_STATUS="${GREEN}YES${NC}"
     fi
     
-    # Выводим информацию о проекте
+    # Print project information
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${CYAN}Проект:${NC}      ${SLUG}"
-    echo -e "${CYAN}Домен:${NC}       ${DOMAIN}"
-    echo -e "${CYAN}Статус:${NC}      ${STATUS}"
+    echo -e "${CYAN}Project:${NC}    ${SLUG}"
+    echo -e "${CYAN}Domain:${NC}     ${DOMAIN}"
+    echo -e "${CYAN}Status:${NC}     ${STATUS}"
     echo -e "${CYAN}SSL:${NC}         ${SSL_STATUS}"
-    echo -e "${CYAN}БД:${NC}          ${DB_TYPE} (порт: ${DB_PORT})"
-    echo -e "${CYAN}Порты:${NC}       HTTP: ${PORT_HTTP}, HTTPS: ${PORT_HTTPS}, PHP: ${PORT_PHP}"
-    echo -e "${CYAN}Путь:${NC}        ${PROJECT_DIR}"
+    echo -e "${CYAN}DB:${NC}         ${DB_TYPE} (port: ${DB_PORT})"
+    echo -e "${CYAN}Ports:${NC}      HTTP: ${PORT_HTTP}, HTTPS: ${PORT_HTTPS}, PHP: ${PORT_PHP}"
+    echo -e "${CYAN}Path:${NC}       ${PROJECT_DIR}"
     
-    # Показываем основные контейнеры
+    # Show the main containers
     if [[ $TOTAL_CONTAINERS -gt 0 ]]; then
-        echo -e "${CYAN}Контейнеры:${NC}"
+        echo -e "${CYAN}Containers:${NC}"
         docker compose ps -a --format "  - {{.Name}}: {{.Status}}" 2>/dev/null | head -n 5
         if [[ $TOTAL_CONTAINERS -gt 5 ]]; then
-            echo "  ... и ещё $((TOTAL_CONTAINERS - 5)) контейнеров"
+            echo "  ... and $((TOTAL_CONTAINERS - 5)) more containers"
         fi
     fi
     
-    # Команды управления
+    # Management commands
     if [[ $RUNNING_CONTAINERS -gt 0 ]]; then
-        echo -e "${CYAN}Деактивировать:${NC} sudo bash deactivate.sh --slug ${SLUG}"
+        echo -e "${CYAN}Deactivate:${NC}   sudo bash deactivate.sh --slug ${SLUG}"
     else
-        echo -e "${CYAN}Активировать:${NC}   sudo bash activate.sh --slug ${SLUG}"
+        echo -e "${CYAN}Activate:${NC}     sudo bash activate.sh --slug ${SLUG}"
     fi
-    echo -e "${CYAN}Удалить:${NC}        sudo bash remove.sh --slug ${SLUG} --domain ${DOMAIN}"
+    echo -e "${CYAN}Remove:${NC}       sudo bash remove.sh --slug ${SLUG} --domain ${DOMAIN}"
     echo ""
 done
 
-# Итоговая статистика
+# Summary statistics
 echo -e "${BLUE}========================================${NC}"
-echo -e "${CYAN}Всего проектов:${NC}    ${PROJECT_COUNT}"
-echo -e "${CYAN}Запущено:${NC}         ${GREEN}${RUNNING_COUNT}${NC}"
-echo -e "${CYAN}Остановлено:${NC}      ${YELLOW}$((PROJECT_COUNT - RUNNING_COUNT))${NC}"
+echo -e "${CYAN}Total projects:${NC} ${PROJECT_COUNT}"
+echo -e "${CYAN}Running:${NC}        ${GREEN}${RUNNING_COUNT}${NC}"
+echo -e "${CYAN}Stopped:${NC}        ${YELLOW}$((PROJECT_COUNT - RUNNING_COUNT))${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
-# Проверяем nginxproxy
+# Check nginxproxy
 if [[ -d "${WWW_DIR}/nginxproxy" ]]; then
     echo -e "${CYAN}Nginx Proxy:${NC}"
     cd "${WWW_DIR}/nginxproxy" || exit 0
     PROXY_STATUS=$(docker compose ps --format "{{.Status}}" 2>/dev/null | head -n 1 || echo "Not running")
     if [[ "$PROXY_STATUS" == *"Up"* ]]; then
-        echo -e "  Статус: ${GREEN}RUNNING${NC}"
+        echo -e "  Status: ${GREEN}RUNNING${NC}"
     else
-        echo -e "  Статус: ${RED}STOPPED${NC}"
+        echo -e "  Status: ${RED}STOPPED${NC}"
     fi
     
-    # Показываем количество сайтов в nginxproxy
+    # Show the number of sites in nginxproxy
     SITES_COUNT=$(ls -1 "${WWW_DIR}/nginxproxy/sites"/*.conf 2>/dev/null | wc -l)
-    echo -e "  Сайтов в конфигурации: ${SITES_COUNT}"
+    echo -e "  Sites in configuration: ${SITES_COUNT}"
     echo ""
 fi
 

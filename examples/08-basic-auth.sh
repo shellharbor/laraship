@@ -2,31 +2,31 @@
 set -euo pipefail
 
 # ============================================================
-# 08-basic-auth.sh — закрытый стенд с HTTP Basic Auth
+# 08-basic-auth.sh — closed environment with HTTP Basic Auth
 # ============================================================
-# Сценарий:
-#   Staging или демо-стенд, который не должен быть виден посторонним.
+# Scenario:
+#   A staging or demo environment that must not be visible to outsiders.
 #
-# Что получится:
-#   - файл /var/www/staging/.config/nginx/.htpasswd (создаётся через httpd:alpine)
-#     и раскомментированное монтирование в docker-compose.yml;
-#   - директивы auth_basic в location / HTTPS-блока nginx проекта;
-#   - AUTH_USER и AUTH_PASSWORD в /var/www/staging/.env.
+# Result:
+#   - the file /var/www/staging/.config/nginx/.htpasswd (created via httpd:alpine)
+#     and the mount in docker-compose.yml uncommented;
+#   - auth_basic directives in location / of the project nginx HTTPS block;
+#   - AUTH_USER and AUTH_PASSWORD in /var/www/staging/.env.
 #
-# Ограничение:
-#   Basic Auth включается только в location /. Прямой запрос к /index.php
-#   (в том числе /index.php/<маршрут>) обрабатывается PHP-location без
-#   auth_basic и обходит защиту. Не полагайтесь на Basic Auth как на
-#   единственную защиту.
+# Limitation:
+#   Basic Auth is enabled only in location /. A direct request to /index.php
+#   (including /index.php/<route>) is handled by the PHP location without
+#   auth_basic and bypasses the protection. Do not rely on Basic Auth as the
+#   only protection.
 #
-# Перед запуском поменяйте:
-#   - slug, домен и email;
-#   - логин и пароль (без флагов --auth-user/--auth-password они сгенерируются).
+# Before running, change:
+#   - the slug, domain and email;
+#   - the login and password (without --auth-user/--auth-password they are generated).
 #
-# Запуск на сервере (из любой папки):
+# Run on the server (from any folder):
 #   bash /opt/laravel-deploy/examples/08-basic-auth.sh
-# DEPLOY_DIR по умолчанию — папка laravel-deploy, в которой лежит этот пример
-# (deploy-laravel.sh, laravel/, nginxproxy/). Переопределение:
+# DEPLOY_DIR defaults to the laravel-deploy folder that contains this example
+# (deploy-laravel.sh, laravel/, nginxproxy/). To override:
 #   DEPLOY_DIR=/srv/laravel-deploy bash 08-basic-auth.sh
 # ============================================================
 

@@ -2,36 +2,36 @@
 set -euo pipefail
 
 # ============================================================
-# 04-native-postgres.sh — PostgreSQL на хосте (--db-native)
+# 04-native-postgres.sh — PostgreSQL on the host (--db-native)
 # ============================================================
-# Сценарий:
-#   На сервере уже работает системный PostgreSQL, и БД сайта должна
-#   жить в нём, а не в отдельном контейнере.
+# Scenario:
+#   The server already runs a system PostgreSQL, and the site's DB should
+#   live in it rather than in a separate container.
 #
-# Что получится:
-#   - контейнера db нет; пользователь и БД (имена и пароль сгенерированы)
-#     созданы через `sudo -u postgres psql`;
-#   - в .env Laravel записаны DB_HOST=172.17.0.1 и DB_PORT=5432;
-#   - остальное как обычно: nginx, php, redis, SSL.
+# Result:
+#   - there is no db container; the user and DB (names and password are generated)
+#     are created via `sudo -u postgres psql`;
+#   - Laravel's .env gets DB_HOST=172.17.0.1 and DB_PORT=5432;
+#   - everything else as usual: nginx, php, redis, SSL.
 #
-# До запуска администратор должен настроить PostgreSQL (скрипт этого не делает):
-#   - PostgreSQL установлен и запущен (systemctl status postgresql);
-#   - listen_addresses включает 172.17.0.1 или '*';
-#   - pg_hba.conf пускает docker-подсети, например:
+# Before running, the administrator must configure PostgreSQL (the script does not do this):
+#   - PostgreSQL is installed and running (systemctl status postgresql);
+#   - listen_addresses includes 172.17.0.1 or '*';
+#   - pg_hba.conf allows the docker subnets, for example:
 #       host  all  all  172.16.0.0/12  scram-sha-256
-#     затем выполнить systemctl reload postgresql;
-#   - фаервол пропускает docker-подсети на порт 5432.
+#     then run systemctl reload postgresql;
+#   - the firewall allows the docker subnets to port 5432.
 #
-# Перед запуском поменяйте:
-#   - slug, домен и email;
-#   - если PostgreSQL слушает не 5432, добавьте --port-postgres <порт>.
-#     Флаг меняет только DB_PORT в Laravel; БД всё равно создаётся
-#     через подключение psql по умолчанию.
+# Before running, change:
+#   - the slug, domain and email;
+#   - if PostgreSQL does not listen on 5432, add --port-postgres <port>.
+#     The flag only changes DB_PORT in Laravel; the DB is still created
+#     through the default psql connection.
 #
-# Запуск на сервере (из любой папки):
+# Run on the server (from any folder):
 #   bash /opt/laravel-deploy/examples/04-native-postgres.sh
-# DEPLOY_DIR по умолчанию — папка laravel-deploy, в которой лежит этот пример
-# (deploy-laravel.sh, laravel/, nginxproxy/). Переопределение:
+# DEPLOY_DIR defaults to the laravel-deploy folder that contains this example
+# (deploy-laravel.sh, laravel/, nginxproxy/). To override:
 #   DEPLOY_DIR=/srv/laravel-deploy bash 04-native-postgres.sh
 # ============================================================
 

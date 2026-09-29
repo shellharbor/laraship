@@ -1,31 +1,31 @@
 #!/bin/bash
 
 # ============================================================
-# activate.sh — активация/включение деактивированного проекта
+# activate.sh — activate/re-enable a deactivated project
 # ============================================================
-# Использование:
+# Usage:
 #   sudo bash activate.sh --slug cp
 #
-# Что делает скрипт:
-#   1. Запускает контейнеры проекта (docker compose up -d --build)
-#   2. Возвращает конфиг сайта: nginxproxy/sites/<slug>.conf.disabled → <slug>.conf
-#   3. Раскомментирует записи slug в nginxproxy/docker-compose.yml
-#   4. Перезагружает контейнеры php (если есть) и nginx проекта
-#   5. Применяет docker-compose.yml nginxproxy и перезагружает его
+# What the script does:
+#   1. Starts the project containers (docker compose up -d --build)
+#   2. Restores the site config: nginxproxy/sites/<slug>.conf.disabled → <slug>.conf
+#   3. Uncomments the slug entries in nginxproxy/docker-compose.yml
+#   4. Restarts the project's php (if present) and nginx containers
+#   5. Applies nginxproxy's docker-compose.yml and restarts it
 #
-# Параметры:
-#   --slug SLUG           Slug проекта (обязательно)
+# Options:
+#   --slug SLUG           Project slug (required)
 # ============================================================
 
 set -euo pipefail
 
-# ==================== Переменные ====================
+# ==================== Variables ====================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WWW_DIR="/var/www"
 PROXY_DIR="${WWW_DIR}/nginxproxy"
 SLUG=""
 
-# ==================== Цветной вывод ==================
+# ==================== Colored output ==================
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -35,73 +35,73 @@ info()  { echo -e "${GREEN}[INFO]${NC}  $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
-# ==================== Проверка root =================
+# ==================== Root check =================
 check_root() {
     if [[ $EUID -ne 0 ]]; then
-        error "Скрипт должен быть запущен с правами root (sudo)"
+        error "This script must be run as root (sudo)"
     fi
 }
 
-# ==================== Парсинг аргументов ============
+# ==================== Argument parsing ============
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --slug)    SLUG="$2";    shift 2 ;;
-            *) error "Неизвестный аргумент: $1" ;;
+            *) error "Unknown argument: $1" ;;
         esac
     done
 
-    [[ -z "$SLUG" ]] && error "Не указан --slug"
+    [[ -z "$SLUG" ]] && error "--slug is required"
 
     PROJECT_DIR="${WWW_DIR}/${SLUG}"
     if [[ ! -d "$PROJECT_DIR" ]]; then
-        error "Проект не найден: ${PROJECT_DIR}"
+        error "Project not found: ${PROJECT_DIR}"
     fi
 }
 
-# ==================== Запуск контейнеров проекта =
+# ==================== Starting the project containers =
 start_project_containers() {
-    info "Запускаю контейнеры проекта ${SLUG}..."
-    cd "${PROJECT_DIR}" || error "Не удалось перейти в ${PROJECT_DIR}"
+    info "Starting containers of project ${SLUG}..."
+    cd "${PROJECT_DIR}" || error "Failed to change directory to ${PROJECT_DIR}"
     
     if docker compose up -d --build; then
-        info "Контейнеры проекта ${SLUG} запущены"
+        info "Containers of project ${SLUG} started"
     else
-        warn "Возникли проблемы при запуске контейнеров"
+        warn "Problems occurred while starting the containers"
     fi
 
     cd "${SCRIPT_DIR}" || true
 }
 
-# ==================== Включение конфига сайта в nginxproxy ====
-# deactivate.sh переименовывает конфиг в <slug>.conf.disabled
+# ==================== Enabling the site config in nginxproxy ====
+# deactivate.sh renames the config to <slug>.conf.disabled
 enable_site_conf() {
     local SITE_CONF="${PROXY_DIR}/sites/${SLUG}.conf"
 
     if [[ -f "${SITE_CONF}.disabled" ]]; then
         mv "${SITE_CONF}.disabled" "$SITE_CONF"
-        info "Конфиг ${SLUG}.conf включён"
+        info "Config ${SLUG}.conf enabled"
     elif [[ ! -f "$SITE_CONF" ]]; then
-        warn "Конфиг ${SITE_CONF} не найден — сайт не будет доступен через nginxproxy"
+        warn "Config ${SITE_CONF} not found — the site will not be reachable through nginxproxy"
     fi
 }
 
-# ==================== Раскомментирование в docker-compose.yml ====
+# ==================== Uncommenting in docker-compose.yml ====
 uncomment_in_docker_compose() {
     local COMPOSE_FILE="${PROXY_DIR}/docker-compose.yml"
     
     if [[ ! -f "$COMPOSE_FILE" ]]; then
-        error "Файл docker-compose.yml не найден: ${COMPOSE_FILE}"
+        error "docker-compose.yml not found: ${COMPOSE_FILE}"
     fi
     
-    info "Раскомментирую записи ${SLUG} в docker-compose.yml..."
+    info "Uncommenting ${SLUG} entries in docker-compose.yml..."
     
     python3 - "${COMPOSE_FILE}" "${SLUG}" <<'PYEOF'
 import sys
 import re
 
 def in_service(lines, idx, name):
-    """Строка idx лежит внутри сервиса name: ближайший выше ключ с отступом 2 — это name"""
+    """Line idx is inside service name: the nearest key above with indent 2 is name"""
     for j in range(idx - 1, -1, -1):
         m = re.match(r'^  ([\w.-]+):', lines[j])
         if m:
@@ -114,8 +114,8 @@ compose_file = sys.argv[1]
 slug = sys.argv[2]
 
 def is_slug_item(line):
-    """Точное совпадение элемента списка ("- lms", "# - lms", "- lms_ssl_certificates:/...") —
-    подстрока задела бы и другие проекты (lms → lms2)"""
+    """Exact match of a list item ("- lms", "# - lms", "- lms_ssl_certificates:/...") —
+    a substring would also hit other projects (lms → lms2)"""
     s = line.strip().lstrip('#').strip()
     if s.startswith('-'):
         s = s[1:].strip()
@@ -131,14 +131,14 @@ i = 0
 while i < len(lines):
     line = lines[i]
     
-    # Раскомментируем сеть из x-common-networks
+    # Uncomment the network in x-common-networks
     if line.strip().startswith("networks:") and i > 0 and "x-common-networks" in lines[i-1]:
         result.append(line)
         i += 1
-        # Обрабатываем список сетей
+        # Process the network list
         while i < len(lines) and (lines[i].strip().startswith("-") or lines[i].strip().startswith("# -")):
             if is_slug_item(lines[i]) and lines[i].strip().startswith("# "):
-                # Раскомментируем строку с нужным slug
+                # Uncomment the line with the target slug
                 uncommented = lines[i].replace("# ", "", 1)
                 result.append(uncommented)
             else:
@@ -146,13 +146,13 @@ while i < len(lines):
             i += 1
         continue
     
-    # Раскомментируем volume из сервиса nginxproxy
+    # Uncomment the volume in the nginxproxy service
     if re.match(r'^\s+volumes:\s*$', line) and in_service(lines, i, "nginxproxy"):
         result.append(line)
         i += 1
         while i < len(lines) and (lines[i].strip().startswith("-") or lines[i].strip().startswith("# -")):
             if is_slug_item(lines[i]) and lines[i].strip().startswith("# "):
-                # Раскомментируем строку с нужным slug
+                # Uncomment the line with the target slug
                 uncommented = lines[i].replace("# ", "", 1)
                 result.append(uncommented)
             else:
@@ -160,21 +160,21 @@ while i < len(lines):
             i += 1
         continue
     
-    # Раскомментируем network на верхнем уровне
+    # Uncomment the top-level network
     if re.match(r'^networks:\s*$', line):
         result.append(line)
         i += 1
         while i < len(lines):
-            # Проверяем, не началась ли новая секция верхнего уровня
+            # Check whether a new top-level section has started
             if lines[i] and not lines[i].startswith(' '):
                 break
-            # Если это закомментированный блок с нужным slug
+            # If this is the commented-out block for the target slug
             if lines[i].strip().startswith(f"# {slug}:"):
-                # Раскомментируем заголовок блока
+                # Uncomment the block header
                 uncommented = lines[i].replace("# ", "", 1)
                 result.append(uncommented)
                 i += 1
-                # Раскомментируем все дочерние элементы
+                # Uncomment all child items
                 while i < len(lines) and lines[i].strip().startswith("#") and lines[i].startswith('  '):
                     uncommented = lines[i].replace("# ", "", 1)
                     result.append(uncommented)
@@ -184,21 +184,21 @@ while i < len(lines):
                 i += 1
         continue
     
-    # Раскомментируем volume на верхнем уровне
+    # Uncomment the top-level volume
     if re.match(r'^volumes:\s*$', line):
         result.append(line)
         i += 1
         while i < len(lines):
-            # Проверяем, не началась ли новая секция верхнего уровня
+            # Check whether a new top-level section has started
             if lines[i] and not lines[i].startswith(' '):
                 break
-            # Если это закомментированный блок с нужным slug
+            # If this is the commented-out block for the target slug
             if lines[i].strip().startswith(f"# {slug}_ssl_certificates:"):
-                # Раскомментируем заголовок блока
+                # Uncomment the block header
                 uncommented = lines[i].replace("# ", "", 1)
                 result.append(uncommented)
                 i += 1
-                # Раскомментируем все дочерние элементы
+                # Uncomment all child items
                 while i < len(lines) and lines[i].strip().startswith("#") and lines[i].startswith('  '):
                     uncommented = lines[i].replace("# ", "", 1)
                     result.append(uncommented)
@@ -214,68 +214,68 @@ while i < len(lines):
 with open(compose_file, 'w') as f:
     f.write("\n".join(result) + "\n")
 
-print(f"Записи {slug} раскомментированы в docker-compose.yml")
+print(f"Entries for {slug} uncommented in docker-compose.yml")
 PYEOF
 
     if [[ $? -eq 0 ]]; then
-        info "docker-compose.yml успешно обновлён"
+        info "docker-compose.yml updated successfully"
     else
-        error "Не удалось обновить docker-compose.yml"
+        error "Failed to update docker-compose.yml"
     fi
 }
 
-# ==================== Перезагрузка контейнеров проекта =
+# ==================== Restarting the project containers =
 restart_project_services() {
-    cd "${PROJECT_DIR}" || error "Не удалось перейти в ${PROJECT_DIR}"
+    cd "${PROJECT_DIR}" || error "Failed to change directory to ${PROJECT_DIR}"
 
-    # У HTML-проектов сервиса php нет — перезапускаем только существующие
+    # HTML projects have no php service — restart only the existing ones
     local SERVICES
     SERVICES=$(docker compose config --services 2>/dev/null | grep -xE 'php|nginx' | tr '\n' ' ' || true)
-    info "Перезагружаю ${SERVICES:-nginx }проекта ${SLUG}..."
+    info "Restarting ${SERVICES:-nginx }for project ${SLUG}..."
 
     # shellcheck disable=SC2086
     if docker compose restart ${SERVICES:-nginx}; then
-        info "Контейнеры ${SERVICES:-nginx }проекта ${SLUG} перезагружены"
+        info "Restarted ${SERVICES:-nginx }for project ${SLUG}"
     else
-        warn "Возникли проблемы при перезагрузке контейнеров"
+        warn "Problems occurred while restarting the containers"
     fi
 
     cd "${SCRIPT_DIR}" || true
 }
 
-# ==================== Перезагрузка nginxproxy ========
+# ==================== Restarting nginxproxy ========
 restart_nginxproxy() {
-    info "Применяю docker-compose.yml nginxproxy и перезагружаю его..."
+    info "Applying nginxproxy's docker-compose.yml and restarting it..."
 
-    # up -d нужен, чтобы прокси снова подключился к раскомментированной сети проекта;
-    # restart — чтобы перечитать конфиги сайтов
+    # up -d is needed so the proxy reconnects to the project's uncommented network;
+    # restart — to reload the site configs
     if (cd "${PROXY_DIR}" && docker compose up -d) && docker restart nginxproxy; then
-        info "nginxproxy успешно перезагружен"
+        info "nginxproxy restarted successfully"
     else
-        warn "Возникли проблемы при перезагрузке nginxproxy"
+        warn "Problems occurred while restarting nginxproxy"
     fi
 }
 
-# ==================== Вывод итоговой информации =====
+# ==================== Summary output =====
 print_summary() {
     echo ""
     echo "============================================================"
-    info "Активация проекта завершена!"
+    info "Project activation completed!"
     echo "============================================================"
     echo ""
-    echo "ПРОЕКТ: ${SLUG}"
-    echo "  Статус:         АКТИВИРОВАН"
+    echo "PROJECT: ${SLUG}"
+    echo "  Status:         ACTIVATED"
     echo ""
-    echo "Что было сделано:"
-    echo "  ✓ Контейнеры проекта запущены (docker compose up -d --build)"
-    echo "  ✓ Конфиг nginxproxy/sites/${SLUG}.conf включён"
-    echo "  ✓ Записи раскомментированы в nginxproxy/docker-compose.yml"
-    echo "  ✓ Контейнеры php (если есть) и nginx проекта перезагружены"
-    echo "  ✓ nginxproxy перезагружен"
+    echo "What was done:"
+    echo "  ✓ Project containers started (docker compose up -d --build)"
+    echo "  ✓ nginxproxy/sites/${SLUG}.conf config enabled"
+    echo "  ✓ Entries uncommented in nginxproxy/docker-compose.yml"
+    echo "  ✓ Project php (if present) and nginx containers restarted"
+    echo "  ✓ nginxproxy restarted"
     echo ""
-    echo "Проект доступен по адресу, указанному в конфигурации"
+    echo "The project is available at the address specified in the configuration"
     echo ""
-    echo "Для деактивации проекта используйте:"
+    echo "To deactivate the project, use:"
     echo "  sudo bash deactivate.sh --slug ${SLUG}"
     echo ""
     echo "============================================================"
@@ -287,7 +287,7 @@ main() {
     check_root
     parse_args "$@"
     
-    info "Начинаю активацию проекта ${SLUG}..."
+    info "Starting activation of project ${SLUG}..."
     echo ""
     
     start_project_containers
