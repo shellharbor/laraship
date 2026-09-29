@@ -60,10 +60,15 @@ load helpers
 }
 
 @test "the repository contains no Cyrillic text (scripts, templates, tests, examples, workflows, docs)" {
+    # Scan only what exists in this checkout: some files (for example SKILL.md) may be
+    # git-ignored and therefore absent on CI.
+    cd "${REPO_ROOT}"
+    local targets=() p
+    for p in *.sh laravel nginxproxy tests examples .github README.md SKILL.md CHANGELOG.md .claude; do
+        [ -e "${p}" ] && targets+=("${p}")
+    done
+    [ "${#targets[@]}" -gt 0 ]
     # Match the UTF-8 lead bytes of the Cyrillic block (U+0400-U+04FF) in the C locale.
-    run env LC_ALL=C grep -rlIP '[\xD0\xD1][\x80-\xBF]' \
-        "${REPO_ROOT}"/*.sh "${REPO_ROOT}/laravel" "${REPO_ROOT}/nginxproxy" \
-        "${REPO_ROOT}/tests" "${REPO_ROOT}/examples" "${REPO_ROOT}/.github" \
-        "${REPO_ROOT}/README.md" "${REPO_ROOT}/SKILL.md" "${REPO_ROOT}/CHANGELOG.md"
+    run env LC_ALL=C grep -rlIP '[\xD0\xD1][\x80-\xBF]' "${targets[@]}"
     [ "${status}" -eq 1 ] || { echo "Cyrillic found in: ${output}" >&2; return 1; }
 }
