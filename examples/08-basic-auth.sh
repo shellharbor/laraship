@@ -24,10 +24,10 @@ set -euo pipefail
 #   - the login and password (without --auth-user/--auth-password they are generated).
 #
 # Run on the server (from any folder):
-#   bash /opt/laravel-deploy/examples/08-basic-auth.sh
-# DEPLOY_DIR defaults to the laravel-deploy folder that contains this example
+#   bash /opt/laraship/examples/08-basic-auth.sh
+# DEPLOY_DIR defaults to the laraship folder that contains this example
 # (deploy-laravel.sh, laravel/, nginxproxy/). To override:
-#   DEPLOY_DIR=/srv/laravel-deploy bash 08-basic-auth.sh
+#   DEPLOY_DIR=/srv/laraship bash 08-basic-auth.sh
 # ============================================================
 
 DEPLOY_DIR="${DEPLOY_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"

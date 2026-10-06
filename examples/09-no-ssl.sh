@@ -10,25 +10,20 @@ set -euo pipefail
 #
 # Result:
 #   - the project, containers, Laravel and DB are ready;
-#   - the HTTPS blocks in _site.conf and nginxproxy/sites/preview.conf are
-#     commented out. The HTTP block serves only /.well-known/acme-challenge/,
-#     so THE SITE IS UNAVAILABLE until a certificate is obtained.
+#   - HTTPS blocks are commented out; the application is available over HTTP
+#     with HTTP APP_URL, and the ACME challenge remains reachable.
 #
-# Once DNS works (run on the server):
-#   cd /var/www/preview
-#   docker compose run --rm certbot certonly --webroot -w /var/www/certbot \
-#     -d preview.example.com --email admin@example.com --agree-tos --non-interactive
-#   sed -i '/^#server {/,/^#}/ s/^#//' .config/nginx/_site.conf /var/www/nginxproxy/sites/preview.conf
-#   docker compose exec nginx nginx -t && docker compose restart nginx
-#   cd /var/www/nginxproxy && docker compose restart
+# Once DNS works, follow README -> "SSL not obtained": the checked procedure
+# locks the project, requests the certificate, validates project/shared proxy
+# TLS and updates APP_URL after successful application.
 #
 # Before running, change: the slug and domain.
 #
 # Run on the server (from any folder):
-#   bash /opt/laravel-deploy/examples/09-no-ssl.sh
-# DEPLOY_DIR defaults to the laravel-deploy folder that contains this example
+#   bash /opt/laraship/examples/09-no-ssl.sh
+# DEPLOY_DIR defaults to the laraship folder that contains this example
 # (deploy-laravel.sh, laravel/, nginxproxy/). To override:
-#   DEPLOY_DIR=/srv/laravel-deploy bash 09-no-ssl.sh
+#   DEPLOY_DIR=/srv/laraship bash 09-no-ssl.sh
 # ============================================================
 
 DEPLOY_DIR="${DEPLOY_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"

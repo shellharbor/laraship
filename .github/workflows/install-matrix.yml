@@ -1,0 +1,64 @@
+name: Install matrix
+
+# Does Laravel install and run under different conditions? Every case is a real deployment, checked and
+# removed (tests/install-matrix.bats, and tests/e2e-repo.bats for --repo on a supported branch).
+# It runs weekly and on demand, not on every push: Composer, Packagist and Laravel change under us
+# (a new release, a new security advisory), and this is the canary for that.
+on:
+  schedule:
+    - cron: "0 4 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: ${{ matrix.case }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        case:
+          - laravel12-postgres
+          - laravel13-mysql
+          - laravel13-filament
+          - laravel12-filament
+          - native-postgres
+          - native-mysql
+          - repo-blocked-10.x
+          - repo-blocked-11.x
+          - laravel99-fails
+          - repo-12.x
+          - repo-13.x
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install bats and free ports 80/443
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bats
+          sudo systemctl stop apache2 nginx 2>/dev/null || true
+          sudo ss -tlnp | grep -E ':(80|443) ' && { echo "::error::ports 80/443 are busy"; exit 1; } || true
+
+      - name: bats
+        env:
+          CASE: ${{ matrix.case }}
+          E2E_ALLOW: "1"
+          E2E_KEEP_LOG: ${{ runner.temp }}/deploy-${{ matrix.case }}.log
+        run: |
+          if [[ "${CASE}" == repo-* && "${CASE}" != repo-blocked-* ]]; then
+            sudo -E env E2E_BRANCH="${CASE#repo-}" bats --print-output-on-failure tests/e2e-repo.bats
+          else
+            sudo -E env INSTALL_CASE="${CASE}" bats --print-output-on-failure tests/install-matrix.bats
+          fi
+
+      - name: Upload the deployment log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: deploy-log-${{ matrix.case }}
+          path: ${{ runner.temp }}/deploy-${{ matrix.case }}.log
+          if-no-files-found: ignore
+          retention-days: 14

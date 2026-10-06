@@ -26,5 +26,7 @@ jobs:
 
       # Validation needs root: check_root runs before argument parsing.
       # The script refuses before making any change, but it creates an empty /var/www.
-      - name: bats (static + validation)
-        run: sudo bats --print-output-on-failure tests/static.bats tests/validation.bats
+      - name: bats (static + validation + presets + safety)
+        run: sudo bats --print-output-on-failure tests/static.bats tests/validation.bats tests/presets.bats tests/safety.bats tests/hardening.bats
+      - name: Python helper behavior
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v

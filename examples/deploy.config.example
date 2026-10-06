@@ -1,0 +1,51 @@
+# Example settings file for deploy-laravel.sh --config (fake values).
+#
+# Copy it, edit it and restrict access, because it holds passwords:
+#   cp deploy.config.example /root/shop.conf && chmod 600 /root/shop.conf
+#   sudo bash deploy-laravel.sh --config /root/shop.conf
+#
+# Rules:
+#   - one KEY=VALUE per line; # starts a comment; blank lines are ignored;
+#   - KEY is the command-line flag in upper case with _ instead of -  (--db-type -> DB_TYPE);
+#   - a value may be wrapped in "double" or 'single' quotes; nothing is expanded or executed;
+#   - boolean flags: true/yes/1/on turns the flag on, false/no/0/off or an empty value leaves it off;
+#   - flags given on the command line override this file.
+# Versions of Laravel, Filament and the database images are in versions.env, not here
+# (LARAVEL_VERSION here is the same as --laravel-version).
+
+SLUG=shop
+DOMAIN=shop.example.com
+DB_TYPE=postgres
+SSL_EMAIL=admin@example.com
+
+# Database (omitted values are generated)
+DB_POSTGRES_NAME=shop_db
+DB_POSTGRES_USER=shop_user
+DB_POSTGRES_PASSWORD=ChangeMe_ShopDb1
+REDIS_PASSWORD=ChangeMe_Redis1
+
+# Filament admin panel
+INSTALL_FILAMENT=true
+FILAMENT_EMAIL=admin@example.com
+FILAMENT_NAME=Admin
+FILAMENT_PASSWORD=ChangeMe_Filament1
+
+# Optional services and hardening
+USE_REDIS=true
+QUEUE_WORKER=true
+BIND_LOCAL=true
+PHP_UPLOAD_MAX=64M
+
+# Basic Auth for a closed environment
+ENABLE_BASIC_AUTH=false
+# AUTH_USER=staging
+# AUTH_PASSWORD=ChangeMe_Staging1
+
+# Existing application instead of a fresh Laravel (cannot be combined with INSTALL_FILAMENT):
+# REPO=git@github.com:acme/shop.git
+# BRANCH=main
+# DEPLOY_KEY=/root/shop_deploy_key
+# POST_DEPLOY=php artisan db:seed --force
+
+NO_SSL=false
+CREATE_BACKUP=false

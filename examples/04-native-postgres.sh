@@ -11,12 +11,12 @@ set -euo pipefail
 # Result:
 #   - there is no db container; the user and DB (names and password are generated)
 #     are created via `sudo -u postgres psql`;
-#   - Laravel's .env gets DB_HOST=172.17.0.1 and DB_PORT=5432;
+#   - Laravel's .env gets DB_HOST=<the Docker host, normally 172.17.0.1> and DB_PORT=5432;
 #   - everything else as usual: nginx, php, redis, SSL.
 #
 # Before running, the administrator must configure PostgreSQL (the script does not do this):
 #   - PostgreSQL is installed and running (systemctl status postgresql);
-#   - listen_addresses includes 172.17.0.1 or '*';
+#   - listen_addresses includes the Docker host address (normally 172.17.0.1) or '*';
 #   - pg_hba.conf allows the docker subnets, for example:
 #       host  all  all  172.16.0.0/12  scram-sha-256
 #     then run systemctl reload postgresql;
@@ -29,10 +29,10 @@ set -euo pipefail
 #     through the default psql connection.
 #
 # Run on the server (from any folder):
-#   bash /opt/laravel-deploy/examples/04-native-postgres.sh
-# DEPLOY_DIR defaults to the laravel-deploy folder that contains this example
+#   bash /opt/laraship/examples/04-native-postgres.sh
+# DEPLOY_DIR defaults to the laraship folder that contains this example
 # (deploy-laravel.sh, laravel/, nginxproxy/). To override:
-#   DEPLOY_DIR=/srv/laravel-deploy bash 04-native-postgres.sh
+#   DEPLOY_DIR=/srv/laraship bash 04-native-postgres.sh
 # ============================================================
 
 DEPLOY_DIR="${DEPLOY_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"

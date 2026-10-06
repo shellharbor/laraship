@@ -1,5 +1,6 @@
 FROM php:8.1-fpm
 
+
 RUN apt update && apt install -y \
     libzip-dev libpng-dev libjpeg-dev libfreetype6-dev \
     libonig-dev libicu-dev libpq-dev libwebp-dev git \
@@ -28,8 +29,8 @@ RUN docker-php-ext-install \
 
 RUN docker-php-ext-enable mysqli pdo_mysql pgsql pdo_pgsql
 
-RUN pecl install redis apcu xdebug && \
-    docker-php-ext-enable redis apcu xdebug
+RUN pecl install redis apcu && \
+    docker-php-ext-enable redis apcu
 
 RUN apt clean && rm -rf /var/lib/apt/lists/*
 
@@ -72,6 +73,9 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 RUN groupadd -g 1000 www \
     && useradd -u 1000 -ms /bin/bash -g www www \
     && chown -R www:www /var/www
+
+RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
+    && sed -i 's/^expose_php = On/expose_php = Off/' "$PHP_INI_DIR/php.ini"
 
 USER www
 

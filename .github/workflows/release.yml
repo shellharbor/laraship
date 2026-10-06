@@ -1,0 +1,56 @@
+name: Release
+
+# Pushing a tag vX.Y.Z publishes a GitHub Release: the description comes from the matching section of
+# CHANGELOG.md, the asset is the project folder as a tarball with a SHA-256 checksum.
+# Tag only when all required checks, including Kubernetes, are green for the commit.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Publish the release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Require successful CI for the exact tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/check-release-ci.py
+
+      - name: Check that the tag matches VERSION and CHANGELOG.md
+        run: |
+          RELEASE="${GITHUB_REF_NAME#v}"
+          if [ "$(tr -d '[:space:]' < VERSION)" != "${RELEASE}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match VERSION ($(cat VERSION))"
+            exit 1
+          fi
+          bash .github/scripts/release-notes.sh "${RELEASE}" CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::error::CHANGELOG.md has no section for ${RELEASE}"
+            exit 1
+          fi
+
+      - name: Build the archive and its checksum
+        run: |
+          RELEASE="${GITHUB_REF_NAME#v}"
+          git archive --format=tar.gz --prefix="laraship-${RELEASE}/" -o "laraship-${RELEASE}.tar.gz" "${GITHUB_REF_NAME}"
+          sha256sum "laraship-${RELEASE}.tar.gz" > "laraship-${RELEASE}.tar.gz.sha256"
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASE="${GITHUB_REF_NAME#v}"
+          FLAGS=()
+          case "${RELEASE}" in *-*) FLAGS+=(--prerelease) ;; esac
+          gh release create "${GITHUB_REF_NAME}" \
+            "laraship-${RELEASE}.tar.gz" "laraship-${RELEASE}.tar.gz.sha256" \
+            --title "${RELEASE}" --notes-file release-notes.md --verify-tag "${FLAGS[@]}"

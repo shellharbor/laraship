@@ -20,6 +20,10 @@ set -euo pipefail
 
 # ==================== Variables ====================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/runtime.sh
+source "$SCRIPT_DIR/lib/runtime.sh"
+# shellcheck source=lib/proxy.sh
+source "$SCRIPT_DIR/lib/proxy.sh"
 WWW_DIR="/var/www"
 PROXY_DIR="${WWW_DIR}/nginxproxy"
 SLUG=""
@@ -51,6 +55,8 @@ parse_args() {
     done
 
     [[ -z "$SLUG" ]] && error "--slug is required"
+    [[ "$SLUG" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || error "Invalid slug: ${SLUG}"
+    [[ "${SLUG,,}" != nginxproxy ]] || error "The slug nginxproxy is reserved for the shared reverse proxy"
 
     PROJECT_DIR="${WWW_DIR}/${SLUG}"
     if [[ ! -d "$PROJECT_DIR" ]]; then
@@ -66,7 +72,7 @@ stop_project_containers() {
     if docker compose down; then
         info "Containers of project ${SLUG} stopped"
     else
-        warn "Problems occurred while stopping the containers"
+        error "Cannot stop project containers; proxy routing is already disabled"
     fi
 
     cd "${SCRIPT_DIR}" || true
@@ -79,7 +85,8 @@ disable_site_conf() {
     local SITE_CONF="${PROXY_DIR}/sites/${SLUG}.conf"
 
     if [[ -f "$SITE_CONF" ]]; then
-        mv "$SITE_CONF" "${SITE_CONF}.disabled"
+        [[ ! -e "${SITE_CONF}.disabled" ]] || error "Both enabled and disabled site configurations exist"
+        mv "$SITE_CONF" "${SITE_CONF}.disabled" || error "Cannot disable site configuration"
         info "Config ${SLUG}.conf disabled (renamed to ${SLUG}.conf.disabled)"
     else
         warn "Config ${SITE_CONF} not found, skipping."
@@ -96,7 +103,7 @@ comment_in_docker_compose() {
     
     info "Commenting out ${SLUG} entries in docker-compose.yml..."
     
-    python3 - "${COMPOSE_FILE}" "${SLUG}" <<'PYEOF'
+    python3 - "${COMPOSE_FILE}" "${SLUG}" <<'PYEOF' || error "Failed to edit configuration"
 import sys
 import re
 
@@ -217,22 +224,15 @@ with open(compose_file, 'w') as f:
 print(f"Entries for {slug} commented out in docker-compose.yml")
 PYEOF
 
-    if [[ $? -eq 0 ]]; then
-        info "docker-compose.yml updated successfully"
-    else
-        error "Failed to update docker-compose.yml"
-    fi
 }
 
 # ==================== Restarting nginxproxy ========
+deactivate_proxy_site() {
+    disable_site_conf
+    comment_in_docker_compose
+}
 restart_nginxproxy() {
-    info "Restarting nginxproxy..."
-    
-    if docker restart nginxproxy; then
-        info "nginxproxy restarted successfully"
-    else
-        warn "Problems occurred while restarting nginxproxy"
-    fi
+    proxy_transaction deactivate_proxy_site || error "Cannot disable proxy routing; project containers retained"
 }
 
 # ==================== Summary output =====
@@ -265,16 +265,19 @@ print_summary() {
 main() {
     check_root
     parse_args "$@"
+    runtime_require python3 flock docker
+    project_lock
+    parse_args "$@"
     
     info "Starting deactivation of project ${SLUG}..."
     echo ""
     
-    stop_project_containers
-    disable_site_conf
-    comment_in_docker_compose
     restart_nginxproxy
+    stop_project_containers
     
     print_summary
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

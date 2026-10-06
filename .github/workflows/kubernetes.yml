@@ -1,0 +1,52 @@
+name: Kubernetes
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kubernetes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  container:
+    name: CLI image with ${{ matrix.db }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        db: [postgres, mysql]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Exercise actual CLI and native Bash interoperability
+        env:
+          E2E_DB: ${{ matrix.db }}
+        run: sudo env LARASHIP_CONTAINER_TEST_ALLOW=1 E2E_DB="$E2E_DB" bash tests/container-e2e.sh
+
+  runtime:
+    name: Laravel ${{ matrix.laravel }} on Kubernetes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        laravel: [12.0.0, 13.0.0]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Behavior and input validation
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Install verified kind and kubectl
+        run: |
+          bash .github/scripts/kubernetes-tools.sh "$RUNNER_TEMP/laraship-bin"
+          echo "$RUNNER_TEMP/laraship-bin" >> "$GITHUB_PATH"
+      - name: Build images, validate API schemas and exercise real workloads
+        env:
+          LARASHIP_K8S_TEST_ALLOW: '1'
+          K8S_LARAVEL: ${{ matrix.laravel }}
+        run: bash tests/kubernetes-e2e.sh

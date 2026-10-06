@@ -1,0 +1,14 @@
+# Line endings: scripts, templates and docs are LF everywhere. A Windows checkout with CRLF breaks
+# bash ($'\r': command not found) and the lint workflow.
+* text=auto eol=lf
+*.sh text eol=lf
+*.bats text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+*.conf text eol=lf
+*.env text eol=lf
+*Dockerfile text eol=lf
+
+# Not part of the release archive (git archive)
+.github export-ignore
+.gitattributes export-ignore

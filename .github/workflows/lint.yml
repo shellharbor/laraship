@@ -22,21 +22,21 @@ jobs:
 
       - name: bash -n
         run: |
-          for f in *.sh tests/*.sh; do
+          for f in *.sh docker/*.sh lib/*.sh tests/*.sh modules/*.sh .github/scripts/*.sh; do
             echo "bash -n $f"
             bash -n "$f"
           done
 
       - name: No CRLF in scripts, templates and tests
         run: |
-          if grep -rlI $'\r' -- *.sh laravel nginxproxy tests .github; then
+          if grep -rlI $'\r' -- *.sh docker kubernetes lib laravel nginxproxy tests .github; then
             echo "::error::Files with CRLF found (LF is required)"
             exit 1
           fi
 
       - name: ShellCheck
         # SC2155 (declare and assign separately) is a style issue in remove.sh: known.
-        run: shellcheck -S warning -e SC2155 -- *.sh tests/*.sh
+        run: shellcheck -S warning -e SC2155 -- *.sh docker/*.sh lib/*.sh tests/*.sh modules/*.sh .github/scripts/*.sh
 
   workflows:
     name: actionlint

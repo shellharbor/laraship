@@ -23,10 +23,10 @@ set -euo pipefail
 #   - the ports, if they are already taken (sudo ss -tlnp).
 #
 # Run on the server (from any folder):
-#   bash /opt/laravel-deploy/examples/03-explicit-db-credentials-and-ports.sh
-# DEPLOY_DIR defaults to the laravel-deploy folder that contains this example
+#   bash /opt/laraship/examples/03-explicit-db-credentials-and-ports.sh
+# DEPLOY_DIR defaults to the laraship folder that contains this example
 # (deploy-laravel.sh, laravel/, nginxproxy/). To override:
-#   DEPLOY_DIR=/srv/laravel-deploy bash 03-explicit-db-credentials-and-ports.sh
+#   DEPLOY_DIR=/srv/laraship bash 03-explicit-db-credentials-and-ports.sh
 # ============================================================
 
 DEPLOY_DIR="${DEPLOY_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"

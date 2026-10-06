@@ -7,17 +7,39 @@ on:
     branches: [main, master]
     paths:
       - "*.sh"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "docker/**"
+      - "docker-preflight.py"
+      - "kubernetes/**"
+      - "lib/**"
+      - "versions.env"
+      - "VERSION"
+      - "CHANGELOG.md"
+      - "modules/**"
       - "laravel/**"
       - "nginxproxy/**"
       - "tests/**"
       - ".github/workflows/e2e.yml"
+      - ".github/workflows/kubernetes.yml"
   pull_request:
     paths:
       - "*.sh"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "docker/**"
+      - "docker-preflight.py"
+      - "kubernetes/**"
+      - "lib/**"
+      - "versions.env"
+      - "VERSION"
+      - "CHANGELOG.md"
+      - "modules/**"
       - "laravel/**"
       - "nginxproxy/**"
       - "tests/**"
       - ".github/workflows/e2e.yml"
+      - ".github/workflows/kubernetes.yml"
   schedule:
     - cron: "0 5 * * 1" # Mondays: catch breakage caused by composer/image updates
   workflow_dispatch:
@@ -43,11 +65,15 @@ jobs:
             db: postgres
             filament: "1"
             laravel: "12.0"
-          - name: MySQL, default Laravel version
-            id: mysql-default
+            extras: "0"
+            config: "0"
+          - name: MySQL, default Laravel version, new options
+            id: mysql-extras
             db: mysql
             filament: "0"
             laravel: ""
+            extras: "1"
+            config: "1"
     steps:
       - uses: actions/checkout@v7
 
@@ -64,11 +90,13 @@ jobs:
           E2E_DB: ${{ matrix.db }}
           E2E_FILAMENT: ${{ matrix.filament }}
           E2E_LARAVEL: ${{ matrix.laravel }}
+          E2E_EXTRAS: ${{ matrix.extras }}
+          E2E_CONFIG: ${{ matrix.config }}
           # The certificate request without DNS is checked only on schedule and manually,
           # so that every PR does not run into Let's Encrypt rate limits.
           E2E_SSL: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && matrix.db == 'mysql' && '1' || '0' }}
           E2E_KEEP_LOG: ${{ runner.temp }}/deploy-${{ matrix.id }}.log
-        run: sudo -E bats --print-output-on-failure tests/e2e.bats
+        run: sudo -E bats --print-output-on-failure tests/e2e.bats tests/e2e-proxy.bats tests/e2e-db-migration.bats
 
       - name: Upload the deployment log
         if: always()
@@ -76,5 +104,63 @@ jobs:
         with:
           name: deploy-log-${{ matrix.id }}
           path: ${{ runner.temp }}/deploy-${{ matrix.id }}.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  e2e-repo:
+    name: Existing application (--repo) and update.sh
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install bats and free ports 80/443
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bats
+          sudo systemctl stop apache2 nginx 2>/dev/null || true
+          sudo ss -tlnp | grep -E ':(80|443) ' && { echo "::error::ports 80/443 are busy"; exit 1; } || true
+
+      - name: bats e2e-repo
+        env:
+          E2E_ALLOW: "1"
+          E2E_KEEP_LOG: ${{ runner.temp }}/deploy-repo.log
+        run: sudo -E bats --print-output-on-failure tests/e2e-repo.bats
+
+      - name: Upload the deployment log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: deploy-log-repo
+          path: ${{ runner.temp }}/deploy-repo.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  e2e-modules:
+    name: Modules (--with filament,horizon)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install bats and free ports 80/443
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bats
+          sudo systemctl stop apache2 nginx 2>/dev/null || true
+          sudo ss -tlnp | grep -E ':(80|443) ' && { echo "::error::ports 80/443 are busy"; exit 1; } || true
+
+      - name: bats e2e-modules
+        env:
+          E2E_ALLOW: "1"
+          E2E_KEEP_LOG: ${{ runner.temp }}/deploy-modules.log
+        run: sudo -E bats --print-output-on-failure tests/e2e-modules.bats
+
+      - name: Upload the deployment log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: deploy-log-modules
+          path: ${{ runner.temp }}/deploy-modules.log
           if-no-files-found: ignore
           retention-days: 14

@@ -10,12 +10,12 @@ set -euo pipefail
 # Result:
 #   - there is no db container; a DB and a user '<user>'@'%' (names and password
 #     are generated) with GRANT ALL on that DB are created in the system MySQL;
-#   - Laravel's .env gets DB_HOST=172.17.0.1 and DB_PORT=3306.
+#   - Laravel's .env gets DB_HOST=<the Docker host, normally 172.17.0.1> and DB_PORT=3306.
 #
 # Important:
 #   - --db-root-password is required. It is needed to create the DB and is NEVER
 #     stored. When removing the project, pass it again:
-#       sudo bash /opt/laravel-deploy/remove.sh --slug wiki --domain wiki.example.com --db-root-password '...'
+#       sudo bash /opt/laraship/remove.sh --slug wiki --domain wiki.example.com --db-root-password '...'
 #     Without it, remove.sh only prints the SQL for manual removal;
 #   - the "Root Password" line in the final output and DB_MYSQL_PASSWORD_ROOT
 #     in .env are a random value, NOT the system MySQL root password;
@@ -31,10 +31,10 @@ set -euo pipefail
 #     DB_PORT in Laravel).
 #
 # Run on the server (from any folder):
-#   bash /opt/laravel-deploy/examples/05-native-mysql.sh
-# DEPLOY_DIR defaults to the laravel-deploy folder that contains this example
+#   bash /opt/laraship/examples/05-native-mysql.sh
+# DEPLOY_DIR defaults to the laraship folder that contains this example
 # (deploy-laravel.sh, laravel/, nginxproxy/). To override:
-#   DEPLOY_DIR=/srv/laravel-deploy bash 05-native-mysql.sh
+#   DEPLOY_DIR=/srv/laraship bash 05-native-mysql.sh
 # (the root password ends up in the shell history; clear it if necessary)
 # ============================================================
 

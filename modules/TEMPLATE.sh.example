@@ -1,0 +1,63 @@
+# shellcheck shell=bash disable=SC2154,SC2034
+# ============================================================
+# Module template (not loaded: the file name does not end in .sh)
+# ============================================================
+# 1. Copy this file to modules/<name>.sh. The name is lowercase letters, digits and '-' and starts
+#    with a letter. Replace every "hello" with the name ('-' becomes '_' in function and variable
+#    names, so module "my-mod" uses mod_my_mod_* and MOD_MY_MOD_*) and every HELLO with the upper case name.
+# 2. Delete the hooks you do not need. Only MOD_HELLO_DESCRIPTION is required.
+# 3. Follow the checklist in modules/README.md ("Contributing a module").
+#
+# The file is sourced into deploy-laravel.sh and runs as root, so keep it small and boring.
+# ============================================================
+
+MOD_HELLO_DESCRIPTION="One line shown by --list-modules"
+MOD_HELLO_REQUIRES=""            # modules enabled automatically before this one, space-separated
+
+# While the arguments are validated, before anything changes. Reject bad or conflicting options here.
+mod_hello_validate() {
+    # [[ -z "$REPO_URL" ]] || error "The hello module cannot be combined with --repo: the application manages its own dependencies"
+    :
+}
+
+# After Laravel is installed and migrated; $1 is the path of Laravel's .env
+mod_hello_env() {
+    # set_env_var "$1" HELLO_ENABLED true
+    :
+}
+
+# After every env hook: composer and artisan work. Run in the project folder and go back afterwards.
+mod_hello_install() {
+    # cd "${PROJECT_DIR}" || error "Failed to change to directory ${PROJECT_DIR}"
+    # docker compose run --rm composer require vendor/package || error "Failed to install vendor/package"
+    # cd "${SCRIPT_DIR}" || true
+    :
+}
+
+# After every install hook: print service definitions (two-space indent, {SLUG} is replaced)
+mod_hello_compose() {
+    # cat <<'YAML'
+    #   hello:
+    #     build:
+    #       context: ./.docker/php
+    #       dockerfile: php83.Dockerfile
+    #     container_name: {SLUG}_hello
+    #     restart: always
+    #     volumes:
+    #       - ./public_html:/var/www/html
+    #     depends_on:
+    #       - php
+    #     working_dir: /var/www/html
+    #     command: [ 'php', 'artisan', 'hello:work' ]
+    #     networks:
+    #       - {SLUG}
+    # YAML
+    :
+}
+
+# Lines for the final summary; end the section with an empty line
+mod_hello_summary() {
+    echo "HELLO (module hello):"
+    echo "  What was set up, and where to look"
+    echo ""
+}

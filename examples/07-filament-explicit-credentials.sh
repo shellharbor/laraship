@@ -20,10 +20,10 @@ set -euo pipefail
 #   - the administrator name (--filament-name).
 #
 # Run on the server (from any folder):
-#   bash /opt/laravel-deploy/examples/07-filament-explicit-credentials.sh
-# DEPLOY_DIR defaults to the laravel-deploy folder that contains this example
+#   bash /opt/laraship/examples/07-filament-explicit-credentials.sh
+# DEPLOY_DIR defaults to the laraship folder that contains this example
 # (deploy-laravel.sh, laravel/, nginxproxy/). To override:
-#   DEPLOY_DIR=/srv/laravel-deploy bash 07-filament-explicit-credentials.sh
+#   DEPLOY_DIR=/srv/laraship bash 07-filament-explicit-credentials.sh
 # ============================================================
 
 DEPLOY_DIR="${DEPLOY_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"

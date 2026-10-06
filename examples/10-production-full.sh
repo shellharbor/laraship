@@ -18,15 +18,10 @@ set -euo pipefail
 #   - the archive /tmp/app_<YYYYmmdd_HHMMSS>.zip; its path is appended to .env as
 #     BACKUP_ARCHIVE_PATH. The archive contains no DB data, only the project folder.
 #
-# After deployment, manually:
-#   - in /var/www/app/public_html/.env set APP_ENV=production and
-#     APP_DEBUG=false, then run docker compose run --rm artisan config:cache.
-#     For Filament in production, the User model must implement
-#     FilamentUser::canAccessPanel();
-#   - block everything except 80/443 with a firewall: ports 8200/4200/6600/5600
-#     are published on all interfaces (PHP-FPM 9200 only on 127.0.0.1),
-#     and Docker bypasses ufw;
-#   - chmod 600 /var/www/app/.env.
+# New deployments already set APP_ENV=production and APP_DEBUG=false, publish
+# project ports on 127.0.0.1, and protect both .env files with mode 600. Filament
+# access is restricted to the provisioned administrator. After deployment,
+# review application-specific settings and run artisan config:cache if needed.
 #
 # --create-dhparam is not added here: in the current template it does not enable
 # ssl_dhparam (see README → "Known limitations").
@@ -39,10 +34,10 @@ set -euo pipefail
 #   - check that Filament 5 is compatible with the chosen Laravel version.
 #
 # Run on the server (from any folder):
-#   bash /opt/laravel-deploy/examples/10-production-full.sh
-# DEPLOY_DIR defaults to the laravel-deploy folder that contains this example
+#   bash /opt/laraship/examples/10-production-full.sh
+# DEPLOY_DIR defaults to the laraship folder that contains this example
 # (deploy-laravel.sh, laravel/, nginxproxy/). To override:
-#   DEPLOY_DIR=/srv/laravel-deploy bash 10-production-full.sh
+#   DEPLOY_DIR=/srv/laraship bash 10-production-full.sh
 # ============================================================
 
 DEPLOY_DIR="${DEPLOY_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"

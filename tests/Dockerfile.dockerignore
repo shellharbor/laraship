@@ -1,0 +1,11 @@
+.git
+.agents
+.codex
+ai-kit
+tmp
+temp
+.env
+.env.*
+**/node_modules
+**/vendor
+**/__pycache__

@@ -119,8 +119,20 @@ for PROJECT_DIR in "${WWW_DIR}"/*; do
     # Check for an SSL certificate (stored in the docker volume <slug>_ssl_certificates)
     SSL_STATUS="${RED}NO${NC}"
     SSL_VOLUME_DIR=$(docker volume inspect -f '{{.Mountpoint}}' "${SLUG}_ssl_certificates" 2>/dev/null || true)
-    if [[ -n "$SSL_VOLUME_DIR" && -e "${SSL_VOLUME_DIR}/live/${DOMAIN}/fullchain.pem" ]]; then
-        SSL_STATUS="${GREEN}YES${NC}"
+    if [[ -n "$SSL_VOLUME_DIR" ]]; then
+        if [[ "${LARASHIP_CONTAINER:-0}" == 1 ]]; then
+            SSL_STATUS="${YELLOW}UNKNOWN${NC}"
+            if docker image inspect busybox:1.37.0 >/dev/null 2>&1; then
+                SSL_STATUS="${RED}NO${NC}"
+                if docker run --rm --pull=never --network none --read-only --cap-drop ALL \
+                --mount "type=volume,src=${SLUG}_ssl_certificates,dst=/certs,readonly" \
+                busybox:1.37.0 test -f "/certs/live/${DOMAIN}/fullchain.pem" 2>/dev/null; then
+                    SSL_STATUS="${GREEN}YES${NC}"
+                fi
+            fi
+        elif [[ -e "${SSL_VOLUME_DIR}/live/${DOMAIN}/fullchain.pem" ]]; then
+            SSL_STATUS="${GREEN}YES${NC}"
+        fi
     fi
     
     # Print project information

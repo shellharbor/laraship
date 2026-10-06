@@ -8,6 +8,7 @@ CLAUDE.md
 KIMI.md
 MANUS.md
 GEMINI.md
+SKILL.md
 AI_CONTEXT.md
 PROJECT_CONTEXT.md
 BOOTSTRAP_PROMPT.md
@@ -17,7 +18,6 @@ BOOTSTRAP_PROMPT.md
 /.ai/
 /.codex/
 /.cursor/
-/.claude/
 /.windsurf/
 /.windsurfrules
 /.cursorrules

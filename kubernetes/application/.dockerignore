@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+**/.env
+**/.env.*
+auth.json
+**/auth.json
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+vendor
+node_modules
+storage/logs/*
+bootstrap/cache/*.php

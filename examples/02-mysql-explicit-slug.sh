@@ -20,10 +20,10 @@ set -euo pipefail
 #   - admin@example.com to a real email.
 #
 # Run on the server (from any folder):
-#   bash /opt/laravel-deploy/examples/02-mysql-explicit-slug.sh
-# DEPLOY_DIR defaults to the laravel-deploy folder that contains this example
+#   bash /opt/laraship/examples/02-mysql-explicit-slug.sh
+# DEPLOY_DIR defaults to the laraship folder that contains this example
 # (deploy-laravel.sh, laravel/, nginxproxy/). To override:
-#   DEPLOY_DIR=/srv/laravel-deploy bash 02-mysql-explicit-slug.sh
+#   DEPLOY_DIR=/srv/laraship bash 02-mysql-explicit-slug.sh
 # ============================================================
 
 DEPLOY_DIR="${DEPLOY_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"

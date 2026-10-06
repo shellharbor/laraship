@@ -14,31 +14,37 @@ Ready-made `deploy-laravel.sh` launch scenarios. Each script consists of a heade
 | [08-basic-auth.sh](08-basic-auth.sh) | Closed environment with HTTP Basic Auth | `--enable-basic-auth` `--auth-user` `--auth-password` |
 | [09-no-ssl.sh](09-no-ssl.sh) | No certificate (DNS not ready yet); manual SSL issuance is described inside | `--no-ssl` |
 | [10-production-full.sh](10-production-full.sh) | Production: everything explicit, Filament, sending data to an endpoint, archive | `--laravel-version` `--install-filament` `--endpoint` `--create-backup` |
+| [11-existing-application.sh](11-existing-application.sh) | Your own application from git, private repository over SSH with a deploy key, seeder after deployment; update later with `update.sh` | `--repo` `--branch` `--deploy-key` `--post-deploy` |
+| [12-optional-services-and-hardening.sh](12-optional-services-and-hardening.sh) | Redis for Laravel, a queue worker, loopback-only ports, larger PHP upload limits | `--use-redis` `--queue-worker` `--bind-local` `--php-upload-max` |
+| [13-config-file.sh](13-config-file.sh) | The whole deployment described in a `KEY=VALUE` file; command-line flags still override it | `--config` |
+| [14-modules.sh](14-modules.sh) | Modules: Filament and Laravel Horizon (Redis is enabled automatically); `--list-modules` | `--with` `--list-modules` |
+| [15-preset.sh](15-preset.sh) | The `api` preset; `--dry-run` shows the effective settings before deploying | `--preset` `--dry-run` |
 
 Supporting files:
 
 | File | What it is |
 |---|---|
 | [project.env.example](project.env.example) | Example of the `/var/www/<slug>/.env` the script generates: PostgreSQL + Basic Auth + Filament, fake values |
+| [deploy.config.example](deploy.config.example) | Example of a `--config` settings file (fake values, every option explained) |
 | [endpoint-payload.json](endpoint-payload.json) | Example of the PUT request body the script sends to `--endpoint` |
 
 ## How to use
 
-The scripts run **on the server**, not on your local machine. The `examples/` folder is delivered to the server together with the whole `laravel-deploy` folder (for example, to `/opt/laravel-deploy/`). By default each example calls `deploy-laravel.sh` from **its own** `laravel-deploy` folder (`DEPLOY_DIR` = the parent of `examples/`), so it can be run from any directory:
+The scripts run **on the server**, not on your local machine. The `examples/` folder is delivered to the server together with the whole `laraship` folder (for example, to `/opt/laraship/`). By default each example calls `deploy-laravel.sh` from **its own** `laraship` folder (`DEPLOY_DIR` = the parent of `examples/`), so it can be run from any directory:
 
 ```bash
 ssh user@server
 
 # 1. edit the domain, email and passwords directly in the copy on the server
-sudo nano /opt/laravel-deploy/examples/02-mysql-explicit-slug.sh
+sudo nano /opt/laraship/examples/02-mysql-explicit-slug.sh
 
 # 2. run
-bash /opt/laravel-deploy/examples/02-mysql-explicit-slug.sh
+bash /opt/laraship/examples/02-mysql-explicit-slug.sh
 ```
 
-If an example is copied outside `laravel-deploy/` (for example, to `~/`), specify the script folder explicitly: `DEPLOY_DIR=/opt/laravel-deploy bash ~/02-mysql-explicit-slug.sh`.
+If an example is copied outside `laraship/` (for example, to `~/`), specify the script folder explicitly: `DEPLOY_DIR=/opt/laraship bash ~/02-mysql-explicit-slug.sh`.
 
 Before running, note:
 - `example.com`, `admin@example.com` and the `ChangeMe_...` passwords are placeholders; replace them.
-- If the `/var/www/<slug>` folder already exists, the script **deletes it** and deploys the project again (see "Re-running the script" in [../README.md](../README.md#re-running-the-script)).
+- An existing `/var/www/<slug>` path is refused without replacing its files. Use `update.sh` for applications deployed with `--repo`, or explicitly remove a project after saving its data for a clean reinstall (see [../README.md](../README.md#re-running-the-script)). New projects use production mode and loopback-only ports.
 - In explicit passwords use only the characters `A-Za-z0-9@%_+-`.
