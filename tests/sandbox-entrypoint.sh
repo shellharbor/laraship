@@ -93,7 +93,9 @@ case "${MODE}" in
     kubernetes)
         bash "$WORK/.github/scripts/kubernetes-tools.sh" /opt/laraship-bin
         export PATH="/opt/laraship-bin:$PATH"
-        bash "$WORK/tests/kubernetes-e2e.sh" ;;
+        # Match GitHub Actions: the test operator has Docker access but is not root.
+        useradd --create-home --uid 1234 --groups docker laraship-k8s
+        runuser -u laraship-k8s -- bash "$WORK/tests/kubernetes-e2e.sh" ;;
     e2e)  run_e2e ;;
     e2e-proxy) E2E_ALLOW=1 bats --print-output-on-failure "${WORK}/tests/e2e-proxy.bats" ;;
     e2e-db-migration) E2E_ALLOW=1 bats --print-output-on-failure "${WORK}/tests/e2e-db-migration.bats" ;;

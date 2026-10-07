@@ -27,6 +27,7 @@ NODE_IMAGE="${K8S_NODE_IMAGE:-kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf9
 CLI_IMAGE="laraship:k8s-cli-test"
 APP_IMAGE="laraship-app:k8s-test"
 mkdir -p "$WORK/app"
+echo "==> Kubernetes E2E operator: UID $(id -u), GID $(id -g)"
 echo '==> build LaraShip CLI'
 docker build -q -t "$CLI_IMAGE" "$ROOT" >/dev/null
 docker run --rm "$CLI_IMAGE" --version
@@ -34,11 +35,15 @@ docker run --rm --user 1000:1000 --read-only "$CLI_IMAGE" kubernetes render \
     --name smoke --namespace smoke --image "$APP_IMAGE" --configmap smoke-config --secret smoke-secret --revision test --worker > "$WORK/render.json"
 if docker run --rm "$CLI_IMAGE" list; then echo 'Compose runner accepted missing host binds' >&2; exit 1; fi
 echo '==> prepare a real Laravel fixture and build the immutable application'
-docker run --rm -v "$WORK/app:/app" -w /app composer:2.10.3 \
+# Keep bind-mounted files owned by the operator, including on non-root CI runners.
+COMPOSER_RUN=(docker run --rm --user "$(id -u):$(id -g)" \
+    -e HOME=/tmp -e COMPOSER_HOME=/tmp/composer \
+    -v "$WORK/app:/app" -w /app composer:2.10.3)
+"${COMPOSER_RUN[@]}" \
     create-project --no-interaction --no-scripts --no-install laravel/laravel . "${K8S_LARAVEL:-13.0.0}" >/dev/null
 # composer.lock is generated on purpose in this temporary test fixture; production uses its committed lock.
-docker run --rm -v "$WORK/app:/app" -w /app composer:2.10.3 config platform.php 8.3.35 >/dev/null
-docker run --rm -v "$WORK/app:/app" -w /app composer:2.10.3 \
+"${COMPOSER_RUN[@]}" config platform.php 8.3.35 >/dev/null
+"${COMPOSER_RUN[@]}" \
     update --no-interaction --no-scripts --no-plugins --no-install >/dev/null
 printf 'IMAGE_SECRET_MUST_NOT_EXIST=fixture-secret\n' > "$WORK/app/.env"
 printf '\nRoute::get("/slow", static function () { sleep(8); return "slow-ok"; });\n' >> "$WORK/app/routes/web.php"

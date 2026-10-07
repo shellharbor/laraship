@@ -117,6 +117,8 @@ After a successful migration, an apply/rollout failure may leave partially updat
 
 These are single-node checks with a PostgreSQL test dependency. Multi-node scheduling, real external Redis/object storage, Ingress/TLS and production sizing need separate application/infrastructure validation.
 
+Local E2E runs the test operator without root, as GitHub Actions does. Fixture preparation runs Composer with that operator's UID/GID, preserving writable routes and removable temporary directories. The sandbox's administrative daemon remains separate from the non-root operator and application runtime.
+
 The existing Compose backend keeps its host paths, named containers, shared proxy and DB volumes. Those deployment details are confined to its adapter; existing generated projects are not certified as portable Kubernetes workloads. Kubernetes uses the separate immutable-image contract. Native DB provisioning, Filament installation, Certbot, scheduler, backup/restore and automatic conversion/migration of an existing Compose project are not implemented in this Kubernetes backend. Prepare modules at application build time; use external database backup operations and an established cluster scheduler/certificate controller. This is not a claim that every legacy Compose utility can run as a Pod.
 
 References: [Kubernetes Jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/), [probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/), [immutable configuration](https://kubernetes.io/docs/concepts/configuration/configmap/#immutable-configmaps), [kind](https://kind.sigs.k8s.io/docs/user/quick-start/).

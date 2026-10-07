@@ -55,4 +55,6 @@ Use a self-contained kubeconfig with embedded certificates, and change `render` 
 
 `bash tests/run-local.sh unit` checks the original Bash behavior and the new guards. `bash tests/run-local.sh container` exercises actual CLI/native interoperability with PostgreSQL; `E2E_DB=mysql` selects MySQL. `bash tests/run-local.sh kubernetes` builds both images and exercises a real Laravel application in disposable kind, with an independent Docker daemon; `K8S_LARAVEL=12.0.0` selects Laravel 12 instead of 13. Run these modes sequentially because their Docker cache must not be shared by running daemons. The production CLI image is separate from `tests/Dockerfile`; that privileged sandbox is exclusively for tests.
 
+The local Kubernetes test operator runs as UID 1234 with access to the sandbox's Docker daemon, matching non-root GitHub Actions execution. Composer creates fixture files with the operator's UID/GID and a writable temporary home so route edits and cleanup work without root. The deployed application still runs as UID 1000.
+
 References: [Docker bind mounts](https://docs.docker.com/engine/storage/bind-mounts/), [Docker daemon security](https://docs.docker.com/engine/security/#docker-daemon-attack-surface).
