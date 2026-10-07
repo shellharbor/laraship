@@ -6,7 +6,6 @@ After every task with file changes, briefly record what changed and why: feature
 
 ### AI-KIT
 
-- Restored the verified LaraShip context and project-continuity profile after they had diverged into a generic template. Kept the local context/wiki in English, corrected the container-standard navigation link and preserved dated test evidence and runtime-control limits.
 - 2026-10-05: separated the language policy: all authored project files and artifacts remain English, while chat with the user uses Russian for questions, plans, progress, explanations, review summaries, and final reports. Project artifacts shown in chat retain English. Synchronized instructions, bootstrap, context, continuity skill, engineering/router rules, README, wiki, and decision log to preserve this distinction.
 - 2026-10-05: replaced the former Terra-based defaults with the user's Adaptive Model Router: Luna for bounded tasks, Sol 6.1 for engineering, and justified Astra escalation. Optimizes total cost to a correct result rather than the price of one call.
 - 2026-10-05: added runtime capability verification, independent reasoning/service-tier/context decisions, standard/pro criteria, the large-input pricing boundary, cache/output budgets, conditional reviewers/delegation, diagnosed retries, and compact JSON router decisions. Distinguished policy fields from supported execution controls.
@@ -24,12 +23,29 @@ After every task with file changes, briefly record what changed and why: feature
 - 2026-10-04: translated all AI-KIT documents, adapters, rules, templates, and the bootstrap prompt into English; established English as the language for future kit updates.
 - 2026-10-04: extended the English language requirement to all authored project content and agent communication, including code, UI text, logs, Git messages, reviews, and reports, so future project work follows one language policy.
 
-### Project
+## 1.1.1
 
-- Fixed Kubernetes E2E fixture ownership on non-root GitHub Actions runners: every Composer command uses the caller's UID/GID and a writable temporary home, allowing route edits and complete cleanup. The local sandbox now runs Kubernetes tests as a non-root operator so this regression is detected locally. Updated the operation guides.
-- Restored the verified 1.1.0 release section referenced by VERSION and the release-notes extractor; the template-only changelog had caused two static CI checks to fail. The version file and publication date are unchanged.
-- Validated the fixture fix locally with real Laravel 12 and 13 on kind as a non-root operator, including complete cleanup. Bash syntax, ShellCheck, 23 Python tests and all 180 Bats checks passed after a targeted rerun of the two repaired release-metadata checks.
-- Confirmed the restored release metadata with a complete isolated Docker unit run: all 180 Bats checks, 23 Python tests and ShellCheck passed together. The supplied CI log's two release failures correspond to the changelog without the 1.1.0 section; no further runtime change was required.
+LaraShip 1.1.1 fixes Kubernetes CI fixture permissions and restores consistent release metadata.
+
+### Fixed
+
+- Composer fixture commands now use the invoking user's UID/GID and a writable temporary home. Non-root GitHub Actions runners can edit Laravel routes and remove temporary files after Kubernetes E2E tests.
+- Restored the missing 1.1.0 changelog section that caused the version-consistency and release-note extraction checks to fail. Updated VERSION and the README installation example to 1.1.1, with a matching release section.
+
+### Tests and documentation
+
+- The local Kubernetes sandbox runs its test operator as non-root UID 1234 with Docker access, exercising the permissions boundary that previously failed only in CI.
+- Updated the Docker/Kubernetes operation guides and restored the verified local project context, continuity profile and navigation after template divergence. Preserved dated validation evidence and the English project-content convention.
+
+### Validation
+
+- The CI fixes passed a complete isolated Docker unit run: 180 Bats checks, 23 Python tests and ShellCheck.
+- Real Laravel 12 and 13 Kubernetes E2E passed locally on kind with a non-root operator, including migrations, two web replicas, worker reconciliation, HTTP, read-only application execution, graceful request draining, dependency outage, Pod replacement and cleanup.
+- Release preparation passed three release-metadata/CLI version checks and five release-gate tests. Notes for 1.1.1 and 1.1.0 extract independently.
+
+### Upgrade notes
+
+This patch requires no database migration or redeployment of existing applications. Native Bash, Docker CLI and Kubernetes deployment contracts remain compatible with 1.1.0. Publication still requires successful CI for the exact tagged commit.
 
 ## 1.1.0
 

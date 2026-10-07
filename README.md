@@ -186,7 +186,7 @@ You can also put the folder into a separate git repository and run `git clone` o
 **Or install a release.** Every release is published on GitHub as a tarball with a SHA-256 checksum:
 
 ```bash
-VERSION=1.1.0
+VERSION=1.1.1
 curl -fsSLO https://github.com/shellharbor/laraship/releases/download/v${VERSION}/laraship-${VERSION}.tar.gz
 curl -fsSLO https://github.com/shellharbor/laraship/releases/download/v${VERSION}/laraship-${VERSION}.tar.gz.sha256
 sha256sum -c laraship-${VERSION}.tar.gz.sha256
