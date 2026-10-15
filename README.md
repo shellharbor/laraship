@@ -186,7 +186,7 @@ You can also put the folder into a separate git repository and run `git clone` o
 **Or install a release.** Every release is published on GitHub as a tarball with a SHA-256 checksum:
 
 ```bash
-VERSION=1.2.0
+VERSION=1.2.2
 curl -fsSLO https://github.com/shellharbor/laraship/releases/download/v${VERSION}/laraship-${VERSION}.tar.gz
 curl -fsSLO https://github.com/shellharbor/laraship/releases/download/v${VERSION}/laraship-${VERSION}.tar.gz.sha256
 sha256sum -c laraship-${VERSION}.tar.gz.sha256
@@ -1553,7 +1553,15 @@ The E2E workflow has two more jobs, `e2e-repo` (for `--repo` and `update.sh`) an
 
 The badges at the top of the file point to the `shellharbor/laraship` repository; if you rename or fork it, update the paths in all badge links.
 
-Release publication requires completed successful `lint.yml`, `tests.yml`, `e2e.yml`, `codeql.yml` and `kubernetes.yml` main/master push runs for the exact tagged commit. Missing, failed or running checks block publication; an earlier green commit is insufficient. Prepare VERSION and matching release notes deliberately before tagging. The next prepared release is **1.2.0**; see its [changes and upgrade notes](CHANGELOG.md#120). Unassigned changes remain under Unreleased.
+Release publication requires completed successful `lint.yml`, `tests.yml`, `e2e.yml`, `codeql.yml` and `kubernetes.yml` main/master push runs for the exact tagged commit. Missing, failed or running checks block publication; an earlier green commit is insufficient. The next prepared release is **1.2.2**; see its [changes and publication notes](CHANGELOG.md#122). Unassigned changes remain under Unreleased.
+
+Prepare releases in this order:
+
+1. Set `VERSION` to the intended version and add the matching numeric section in `CHANGELOG.md`. Commit these files together with the release changes.
+2. Push that commit to main/master and wait for all five required workflows to finish successfully for that exact SHA.
+3. Create and push the matching tag, such as `v1.2.2`, pointing to that verified commit. The native CLI version, archive and Docker Hub image derive from its committed `VERSION` file.
+
+The failed `v1.2.1` attempt used `VERSION=1.2.0`. The `v1.2.2` tag must point to the new release-preparation commit; rerunning the old tag cannot pick up later file changes.
 
 Publication can be retried safely: matching existing assets are verified, missing assets are uploaded, and published files and release notes are preserved. Different or incomplete assets, draft releases and moved tags are refused. Legacy assets without digest metadata are downloaded for comparison. Jobs for the same tag are serialized. After the updated workflow reaches the default branch, use **Actions → Release → Run workflow** with an existing tag such as `v1.1.1` to complete a release created manually; the selected workflow supplies the current publisher/CI policy while the checkout and archive use the requested tag. The same exact-commit CI and version checks apply. See [ADR-0006](docs/adr/0006-idempotent-release-publication.md).
 

@@ -4,24 +4,8 @@ After every task with file changes, briefly record what changed and why: feature
 
 ## Unreleased
 
-### Added
-
-- Optionally publish the CLI image to Docker Hub from the Release workflow using GitHub Variables for the login/image name and a GitHub Secret for the access token. Build and smoke-test the verified release commit before pushing its full version tag; document setup, existing-release publication and digest pinning.
-
-### Fixed
-
-- Make the PHP address-change E2E fixture use Docker IPAM allocation instead of a static `--ip`, so it works on project networks without an explicitly configured subnet. Retry once if a lower free address lets PHP reuse its old IP. Always remove owned holders, restore PHP and reload Nginx on fixture failure to prevent cascading lifecycle-test failures.
-
-### Validation
-
-- Docker Hub automation passed 188 Bats checks, 54 Python tests, configured ShellCheck/Bash syntax and actionlint. A real linux/amd64 CLI build passed version/help/dry-run and non-root Kubernetes-render checks without network and with a read-only root filesystem; registry authentication/push remains unverified.
-- Passed six isolated Docker address-change/recovery scenarios and the supplied PostgreSQL + Filament + Laravel 12 CI command: 44 checks passed and 8 configuration-dependent checks skipped. All 184 Bats unit checks, 54 Python tests, project-configured ShellCheck and continuity-skill validation passed.
-- Confirmed the same fixture repair with the supplied MySQL/config/Redis/queue/backup CI command: 50 checks passed and 2 configuration-dependent checks skipped, including PHP address changes, backup/restore, shared-proxy recovery and logical Elestio-to-official MySQL migration.
-
 ### AI-KIT
 
-- Record Docker Hub configuration, verified-source publication and image digest guidance in the context, navigation and continuity profile; refresh the current checkout after the committed E2E repair.
-- Refresh the current checkout, test navigation and continuity profile for the dynamic-IPAM fixture repair; distinguish this test-only failure from the earlier deployment-time HTTP 502 investigation.
 - 2026-10-05: separated the language policy: all authored project files and artifacts remain English, while chat with the user uses Russian for questions, plans, progress, explanations, review summaries, and final reports. Project artifacts shown in chat retain English. Synchronized instructions, bootstrap, context, continuity skill, engineering/router rules, README, wiki, and decision log to preserve this distinction.
 - 2026-10-05: replaced the former Terra-based defaults with the user's Adaptive Model Router: Luna for bounded tasks, Sol 6.1 for engineering, and justified Astra escalation. Optimizes total cost to a correct result rather than the price of one call.
 - 2026-10-05: added runtime capability verification, independent reasoning/service-tier/context decisions, standard/pro criteria, the large-input pricing boundary, cache/output budgets, conditional reviewers/delegation, diagnosed retries, and compact JSON router decisions. Distinguished policy fields from supported execution controls.
@@ -38,6 +22,33 @@ After every task with file changes, briefly record what changed and why: feature
 - Added a mandatory Kubernetes-ready standard for new Dockerfiles, containers, and microservices: portable images, configuration, security, shutdown, health checks, storage, and minimal manifests. Integrated the rule into instructions, context, the skill, and bootstrap so services are ready for Kubernetes from the start.
 - 2026-10-04: translated all AI-KIT documents, adapters, rules, templates, and the bootstrap prompt into English; established English as the language for future kit updates.
 - 2026-10-04: extended the English language requirement to all authored project content and agent communication, including code, UI text, logs, Git messages, reviews, and reports, so future project work follows one language policy.
+
+## 1.2.2
+
+LaraShip 1.2.2 synchronizes release metadata, adds optional Docker Hub publication and fixes the PHP address-change E2E fixture.
+
+### Fixed
+
+- Set VERSION, release notes and installation/publication examples to 1.2.2. The v1.2.1 publication attempt was blocked because its source still declared VERSION=1.2.0; tag/version and exact-commit CI checks remain enforced.
+- Use dynamic Docker IPAM allocation instead of a static `--ip` in the PHP address-change E2E fixture. Retry once if PHP reuses its old address, and restore PHP plus Nginx routing on every exit to prevent cascading test failures.
+
+### Docker Hub
+
+- Add optional CLI image publication to the Release workflow after successful GitHub release publication and exact-commit CI verification.
+- Configure the Docker Hub login/image through GitHub Variables `DOCKERHUB_USERNAME` and `DOCKERHUB_IMAGE`, and the access token through Secret `DOCKERHUB_TOKEN`. Missing or malformed enabled settings fail before publication; absent variables leave the optional job disabled.
+- Build `linux/amd64` from the verified release SHA, check version/help/deployment dry run/non-root Kubernetes rendering, then publish the full version tag and report its digest. Keep credentials out of image build inputs.
+
+### Documentation and internal changes
+
+- Document the release sequence: commit matching VERSION and CHANGELOG metadata, push main/master, wait for all five required checks on the exact SHA, then tag that commit. The new `v1.2.2` tag must include this preparation; rerunning the old tag does not incorporate later changes.
+- Document Docker Hub setup, existing-release publication and digest pinning. Refresh project context, continuity instructions and navigation for release metadata, Docker Hub and the E2E fixture repair.
+
+### Validation
+
+- Release preparation passed 28 static Bats checks, 25 Python release-gate/publication tests and actionlint. The actual workflow metadata step accepts v1.2.2 and rejects v1.2.1; CLI, extracted notes and Docker Hub metadata agree on 1.2.2. Historical 1.2.0/1.1.1/1.1.0 release-note bodies are unchanged.
+- Before this metadata-only preparation, Docker Hub automation passed 188 Bats checks, 54 Python tests, configured ShellCheck/Bash syntax and actionlint. A real linux/amd64 CLI build passed version/help/dry-run and non-root Kubernetes-render checks without network and with a read-only root filesystem.
+- The E2E fixture repair passed six isolated Docker address-change/recovery cases. The PostgreSQL/Filament/Laravel 12 CI variant passed 44 checks with 8 configuration-dependent skips; the MySQL/config/Redis/queue/backup variant passed 50 checks with 2 configuration-dependent skips, including backup/restore and logical Elestio-to-official MySQL migration.
+- Remote CI for the final release commit and Docker Hub authentication/publication must still succeed before this version can be considered published.
 
 ## 1.2.0
 

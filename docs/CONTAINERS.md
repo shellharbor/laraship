@@ -29,13 +29,13 @@ Keep the token in Secrets. The namespace in `DOCKERHUB_IMAGE` can differ from th
 
 The existing [Release workflow](../.github/workflows/release.yml) publishes the CLI image after GitHub release publication succeeds, including the exact-commit CI gate and VERSION/CHANGELOG checks. It checks out the verified commit by SHA, builds the root Dockerfile for `linux/amd64`, and checks version, help, deployment dry run and non-root Kubernetes rendering before login and push. The Docker Hub token is passed only to credential validation and the registry login action. This publishes the administrative CLI; application images and Compose PHP images have their own build contexts.
 
-Push a prepared tag such as `v1.2.0` after all required checks pass. To publish an existing version, first put the updated workflow on the default branch, then open **Actions → Release → Run workflow**, select that branch and enter the existing tag. Its commit must pass the same CI gate, contain the CLI Dockerfile, and match VERSION and CHANGELOG. Manual publication uses the selected workflow's configuration validator and the requested release's source code.
+Commit `VERSION=1.2.2` and the matching CHANGELOG section before creating `v1.2.2`. Push the commit to main/master, wait for all required checks on its exact SHA, then tag and push that verified commit. See the [release preparation sequence](../README.md#github-actions). To publish an existing version, first put the updated workflow on the default branch, then open **Actions → Release → Run workflow**, select that branch and enter the existing tag. Its commit must pass the same CI gate, contain the CLI Dockerfile, and match VERSION and CHANGELOG. Manual publication uses the selected workflow's configuration validator and the requested release's source code.
 
-The image uses the full version without the leading `v`: `your-namespace/laraship:1.2.0`, or `your-namespace/laraship:1.3.0-rc.1` for a prerelease. The Actions job summary records the image digest:
+The image uses the full version without the leading `v`: `your-namespace/laraship:1.2.2`, or `your-namespace/laraship:1.3.0-rc.1` for a prerelease. The Actions job summary records the image digest:
 
 ```bash
-docker pull your-namespace/laraship:1.2.0
-docker run --rm your-namespace/laraship:1.2.0 --version
+docker pull your-namespace/laraship:1.2.2
+docker run --rm your-namespace/laraship:1.2.2 --version
 ```
 
 Use the reported `your-namespace/laraship@sha256:...` reference for reproducible deployment: a rerun can rebuild a version tag from changing base packages. Substitute that reference for `laraship:local` in the examples below. Publishing is performed inside Release rather than a second release-event workflow, because [events created by GITHUB_TOKEN generally do not trigger another workflow](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow). A Docker Hub failure leaves the existing GitHub release intact; rerun Release after correcting the registry configuration.
