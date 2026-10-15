@@ -82,6 +82,64 @@ load helpers
     [ -z "${output}" ]
 }
 
+@test "Docker Hub metadata uses the release version and an independent organization namespace" {
+    local version_file="$BATS_TEST_TMPDIR/VERSION" outputs="$BATS_TEST_TMPDIR/outputs"
+    printf '2.3.4\n' > "$version_file"
+    run env DOCKERHUB_USERNAME=releasebot DOCKERHUB_IMAGE=example-org/laraship \
+        GITHUB_OUTPUT="$outputs" bash "$REPO_ROOT/.github/scripts/dockerhub-metadata.sh" v2.3.4 "$version_file"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$outputs")" = $'image_tag=example-org/laraship:2.3.4\nversion=2.3.4' ]
+    [ -z "$output" ]
+}
+
+@test "Docker Hub metadata preserves prerelease versions" {
+    local version_file="$BATS_TEST_TMPDIR/VERSION" outputs="$BATS_TEST_TMPDIR/outputs"
+    printf '2.3.4-rc.1\n' > "$version_file"
+    run env DOCKERHUB_USERNAME=releasebot DOCKERHUB_IMAGE=example/laraship_cli \
+        GITHUB_OUTPUT="$outputs" bash "$REPO_ROOT/.github/scripts/dockerhub-metadata.sh" v2.3.4-rc.1 "$version_file"
+    [ "$status" -eq 0 ]
+    grep -qx 'image_tag=example/laraship_cli:2.3.4-rc.1' "$outputs"
+}
+
+@test "Docker Hub metadata refuses invalid settings without writing outputs or echoing their values" {
+    local version_file="$BATS_TEST_TMPDIR/VERSION" outputs="$BATS_TEST_TMPDIR/outputs" value
+    printf '2.3.4\n' > "$version_file"
+    for value in '' Example/laraship registry.example/namespace/laraship example/laraship:latest $'example/laraship\nforged=value'; do
+        run env DOCKERHUB_USERNAME=releasebot DOCKERHUB_IMAGE="$value" \
+            GITHUB_OUTPUT="$outputs" bash "$REPO_ROOT/.github/scripts/dockerhub-metadata.sh" v2.3.4 "$version_file"
+        [ "$status" -ne 0 ]
+        [ ! -e "$outputs" ]
+        if [ -n "$value" ]; then [[ "$output" != *"$value"* ]]; fi
+    done
+    for value in '' $'invalid\nlogin' 'invalid login'; do
+        run env DOCKERHUB_USERNAME="$value" DOCKERHUB_IMAGE=example/laraship \
+            GITHUB_OUTPUT="$outputs" bash "$REPO_ROOT/.github/scripts/dockerhub-metadata.sh" v2.3.4 "$version_file"
+        [ "$status" -ne 0 ]
+        [ ! -e "$outputs" ]
+    done
+}
+
+@test "Docker Hub metadata refuses mismatched or malformed versions before writing outputs" {
+    local version_file="$BATS_TEST_TMPDIR/VERSION" outputs="$BATS_TEST_TMPDIR/outputs" tag
+    printf '2.3.4\n' > "$version_file"
+    for tag in v2.3.5 2.3.4 v2.3.4+build $'v2.3.4\nforged=value'; do
+        run env DOCKERHUB_USERNAME=releasebot DOCKERHUB_IMAGE=example/laraship \
+            GITHUB_OUTPUT="$outputs" bash "$REPO_ROOT/.github/scripts/dockerhub-metadata.sh" "$tag" "$version_file"
+        [ "$status" -ne 0 ]
+        [ ! -e "$outputs" ]
+    done
+    tag="v2.3.4-$(printf '%0130d' 0)"
+    printf '%s\n' "${tag#v}" > "$version_file"
+    run env DOCKERHUB_USERNAME=releasebot DOCKERHUB_IMAGE=example/laraship \
+        GITHUB_OUTPUT="$outputs" bash "$REPO_ROOT/.github/scripts/dockerhub-metadata.sh" "$tag" "$version_file"
+    [ "$status" -ne 0 ]
+    [ ! -e "$outputs" ]
+    run env DOCKERHUB_USERNAME=releasebot DOCKERHUB_IMAGE=example/laraship \
+        GITHUB_OUTPUT="$outputs" bash "$REPO_ROOT/.github/scripts/dockerhub-metadata.sh" v2.3.4 "$BATS_TEST_TMPDIR/missing"
+    [ "$status" -ne 0 ]
+    [ ! -e "$outputs" ]
+}
+
 @test "the release workflow needs a tag that matches VERSION (files exist)" {
     [ -f "${REPO_ROOT}/.github/workflows/release.yml" ]
     [ -f "${REPO_ROOT}/.gitattributes" ]

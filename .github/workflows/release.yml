@@ -24,6 +24,8 @@ jobs:
   release:
     name: Publish the release
     runs-on: ubuntu-24.04
+    outputs:
+      commit: ${{ steps.revision.outputs.commit }}
     permissions:
       contents: write
       actions: read
@@ -65,7 +67,10 @@ jobs:
           fi
 
       - name: Build the archive and its checksum
+        id: revision
         run: |
+          COMMIT="$(git rev-parse HEAD)"
+          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
           RELEASE="${RELEASE_TAG#v}"
           git archive --format=tar.gz --prefix="laraship-${RELEASE}/" -o "laraship-${RELEASE}.tar.gz" "refs/tags/${RELEASE_TAG}"
           sha256sum "laraship-${RELEASE}.tar.gz" > "laraship-${RELEASE}.tar.gz.sha256"
@@ -79,3 +84,94 @@ jobs:
             --tag "$RELEASE_TAG" --notes-file release-notes.md \
             --asset "laraship-${RELEASE}.tar.gz" \
             --asset "laraship-${RELEASE}.tar.gz.sha256"
+
+  dockerhub:
+    name: Publish the CLI image to Docker Hub
+    needs: release
+    if: vars.DOCKERHUB_IMAGE != '' || vars.DOCKERHUB_USERNAME != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+      DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Preserve the current Docker Hub configuration validator
+        run: cp .github/scripts/dockerhub-metadata.sh "$RUNNER_TEMP/laraship-dockerhub-metadata.sh"
+
+      - name: Check out the exact commit verified by release publication
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.commit }}
+          persist-credentials: false
+
+      - name: Validate Docker Hub settings and release metadata
+        id: image
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [[ -z "$DOCKERHUB_TOKEN" ]]; then
+            echo "::error::Set DOCKERHUB_TOKEN in GitHub Actions Secrets."
+            exit 1
+          fi
+          bash "$RUNNER_TEMP/laraship-dockerhub-metadata.sh" "$RELEASE_TAG" VERSION
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build the CLI image for smoke checks
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: laraship:release-smoke
+          cache-from: type=gha,scope=laraship-cli
+          labels: |
+            org.opencontainers.image.version=${{ steps.image.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.release.outputs.commit }}
+
+      - name: Check the packaged CLI before publishing
+        env:
+          RELEASE_VERSION: ${{ steps.image.outputs.version }}
+        run: |
+          test "$(docker run --rm --network none --read-only --tmpfs /tmp laraship:release-smoke --version)" = "deploy-laravel.sh $RELEASE_VERSION"
+          docker run --rm --network none --read-only --tmpfs /tmp laraship:release-smoke --help
+          docker run --rm --network none --read-only --tmpfs /tmp laraship:release-smoke deploy --dry-run --domain smoke.example.test --db-type postgres --no-ssl
+          docker run --rm --user 1000:1000 --network none --read-only --tmpfs /tmp laraship:release-smoke kubernetes render \
+            --name smoke --namespace smoke --image example/app:1.0.0 \
+            --configmap smoke-config-v1 --secret smoke-secret-v1 --revision v1
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Publish the versioned CLI image
+        id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.image.outputs.image_tag }}
+          cache-from: type=gha,scope=laraship-cli
+          cache-to: type=gha,scope=laraship-cli,mode=max
+          labels: |
+            org.opencontainers.image.version=${{ steps.image.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.release.outputs.commit }}
+
+      - name: Record the image reference and digest
+        env:
+          IMAGE_NAME: ${{ vars.DOCKERHUB_IMAGE }}
+          IMAGE_TAG: ${{ steps.image.outputs.image_tag }}
+          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          printf '### Docker Hub CLI image\n\nTag: %s\n\nPinned reference: %s@%s\n' \
+            "$IMAGE_TAG" "$IMAGE_NAME" "$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"

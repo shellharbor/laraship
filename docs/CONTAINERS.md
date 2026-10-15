@@ -11,7 +11,34 @@ docker run --rm laraship:local --version
 docker run --rm laraship:local deploy --dry-run --domain shop.example.com --db-type postgres --no-ssl
 ```
 
-The image is built locally; these changes do not publish a registry image. BuildKit is required. Docker CLI 29.8.2, kubectl 1.37.0 and Ubuntu 24.04 are the image's supported baseline. The native Kubernetes adapter requires Python 3.10+ and kubectl compatible with the target cluster.
+BuildKit is required. Docker CLI 29.8.2, kubectl 1.37.0 and Ubuntu 24.04 are the image's supported baseline. The native Kubernetes adapter requires Python 3.10+ and kubectl compatible with the target cluster.
+
+## Publish to Docker Hub with GitHub Actions
+
+Create a Docker Hub repository, for example `YOUR_NAMESPACE/laraship`, and a [personal access token](https://docs.docker.com/security/access-tokens/) with Read and Write permission for that repository. The login account must have push access when the namespace belongs to an organization.
+
+In the GitHub repository, open **Settings → Secrets and variables → Actions** and configure:
+
+| Tab | Name | Value |
+|---|---|---|
+| Variables | `DOCKERHUB_USERNAME` | The Docker Hub login that owns the token |
+| Variables | `DOCKERHUB_IMAGE` | The full lowercase repository name, for example `your-namespace/laraship` |
+| Secrets | `DOCKERHUB_TOKEN` | The Docker Hub personal access token |
+
+Keep the token in Secrets. The namespace in `DOCKERHUB_IMAGE` can differ from the login account. With both variables absent, Docker Hub publication is skipped; partially configured settings fail with a configuration error.
+
+The existing [Release workflow](../.github/workflows/release.yml) publishes the CLI image after GitHub release publication succeeds, including the exact-commit CI gate and VERSION/CHANGELOG checks. It checks out the verified commit by SHA, builds the root Dockerfile for `linux/amd64`, and checks version, help, deployment dry run and non-root Kubernetes rendering before login and push. The Docker Hub token is passed only to credential validation and the registry login action. This publishes the administrative CLI; application images and Compose PHP images have their own build contexts.
+
+Push a prepared tag such as `v1.2.0` after all required checks pass. To publish an existing version, first put the updated workflow on the default branch, then open **Actions → Release → Run workflow**, select that branch and enter the existing tag. Its commit must pass the same CI gate, contain the CLI Dockerfile, and match VERSION and CHANGELOG. Manual publication uses the selected workflow's configuration validator and the requested release's source code.
+
+The image uses the full version without the leading `v`: `your-namespace/laraship:1.2.0`, or `your-namespace/laraship:1.3.0-rc.1` for a prerelease. The Actions job summary records the image digest:
+
+```bash
+docker pull your-namespace/laraship:1.2.0
+docker run --rm your-namespace/laraship:1.2.0 --version
+```
+
+Use the reported `your-namespace/laraship@sha256:...` reference for reproducible deployment: a rerun can rebuild a version tag from changing base packages. Substitute that reference for `laraship:local` in the examples below. Publishing is performed inside Release rather than a second release-event workflow, because [events created by GITHUB_TOKEN generally do not trigger another workflow](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow). A Docker Hub failure leaves the existing GitHub release intact; rerun Release after correcting the registry configuration.
 
 ## PHP runtime builds
 

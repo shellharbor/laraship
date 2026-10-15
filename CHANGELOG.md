@@ -4,17 +4,23 @@ After every task with file changes, briefly record what changed and why: feature
 
 ## Unreleased
 
+### Added
+
+- Optionally publish the CLI image to Docker Hub from the Release workflow using GitHub Variables for the login/image name and a GitHub Secret for the access token. Build and smoke-test the verified release commit before pushing its full version tag; document setup, existing-release publication and digest pinning.
+
 ### Fixed
 
 - Make the PHP address-change E2E fixture use Docker IPAM allocation instead of a static `--ip`, so it works on project networks without an explicitly configured subnet. Retry once if a lower free address lets PHP reuse its old IP. Always remove owned holders, restore PHP and reload Nginx on fixture failure to prevent cascading lifecycle-test failures.
 
 ### Validation
 
+- Docker Hub automation passed 188 Bats checks, 54 Python tests, configured ShellCheck/Bash syntax and actionlint. A real linux/amd64 CLI build passed version/help/dry-run and non-root Kubernetes-render checks without network and with a read-only root filesystem; registry authentication/push remains unverified.
 - Passed six isolated Docker address-change/recovery scenarios and the supplied PostgreSQL + Filament + Laravel 12 CI command: 44 checks passed and 8 configuration-dependent checks skipped. All 184 Bats unit checks, 54 Python tests, project-configured ShellCheck and continuity-skill validation passed.
 - Confirmed the same fixture repair with the supplied MySQL/config/Redis/queue/backup CI command: 50 checks passed and 2 configuration-dependent checks skipped, including PHP address changes, backup/restore, shared-proxy recovery and logical Elestio-to-official MySQL migration.
 
 ### AI-KIT
 
+- Record Docker Hub configuration, verified-source publication and image digest guidance in the context, navigation and continuity profile; refresh the current checkout after the committed E2E repair.
 - Refresh the current checkout, test navigation and continuity profile for the dynamic-IPAM fixture repair; distinguish this test-only failure from the earlier deployment-time HTTP 502 investigation.
 - 2026-10-05: separated the language policy: all authored project files and artifacts remain English, while chat with the user uses Russian for questions, plans, progress, explanations, review summaries, and final reports. Project artifacts shown in chat retain English. Synchronized instructions, bootstrap, context, continuity skill, engineering/router rules, README, wiki, and decision log to preserve this distinction.
 - 2026-10-05: replaced the former Terra-based defaults with the user's Adaptive Model Router: Luna for bounded tasks, Sol 6.1 for engineering, and justified Astra escalation. Optimizes total cost to a correct result rather than the price of one call.
