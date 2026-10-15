@@ -334,19 +334,37 @@ teardown_file() {
         dc() { docker compose --project-directory "$project" -f "$project/docker-compose.yml" "$@"; }
         old_ip=$(docker inspect -f "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}" "${slug}_php")
         image=$(docker inspect -f "{{.Config.Image}}" "${slug}_nginx")
-        if docker container inspect "$holder" >/dev/null 2>&1; then
-            echo "Refusing an existing PHP address-reservation fixture: $holder" >&2
-            exit 1
-        fi
-        holder_created=false
-        # Always restore routing for subsequent lifecycle checks, including a failed assertion.
-        trap '\''if [[ "$holder_created" == true ]]; then docker rm -f "$holder" >/dev/null 2>&1 || true; fi; docker exec "${slug}_nginx" nginx -s reload >/dev/null 2>&1 || true'\'' EXIT
-        dc rm -sf php >/dev/null
-        # Reserve the previous address so the recreated PHP container cannot reuse it.
-        docker run -d --name "$holder" --network "$network" --ip "$old_ip" --entrypoint sleep "$image" 120 >/dev/null
-        holder_created=true
-        dc up -d --no-deps php >/dev/null
-        new_ip=$(docker inspect -f "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}" "${slug}_php")
+        holders=("$holder" "${holder}_retry")
+        for holder in "${holders[@]}"; do
+            if docker container inspect "$holder" >/dev/null 2>&1; then
+                echo "Refusing an existing PHP address-reservation fixture: $holder" >&2
+                exit 1
+            fi
+        done
+        holder_ids=()
+        # Restore PHP as well as routing when fixture setup or an assertion fails.
+        cleanup() {
+            local result=$?
+            trap - EXIT
+            if (( ${#holder_ids[@]} )); then
+                docker rm -f "${holder_ids[@]}" >/dev/null || result=1
+            fi
+            dc up -d --no-deps php >/dev/null || result=1
+            docker exec "${slug}_nginx" nginx -s reload >/dev/null || result=1
+            exit "$result"
+        }
+        trap cleanup EXIT
+        # Some Docker engines reject --ip without an explicitly configured subnet.
+        # Keep a second holder if the first takes a lower free address and PHP reuses its old IP.
+        for holder in "${holders[@]}"; do
+            dc rm -sf php >/dev/null
+            holder_id=$(docker create --name "$holder" --network "$network" --entrypoint sleep "$image" 120)
+            holder_ids+=("$holder_id")
+            docker start "$holder_id" >/dev/null
+            dc up -d --no-deps php >/dev/null
+            new_ip=$(docker inspect -f "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}" "${slug}_php")
+            if [[ -n "$new_ip" && "$old_ip" != "$new_ip" ]]; then break; fi
+        done
         [[ -n "$old_ip" && -n "$new_ip" && "$old_ip" != "$new_ip" ]]
         printf "PHP address changed from %s to %s\n" "$old_ip" "$new_ip"
         code=$(curl --max-time 5 -s -o /dev/null -w "%{http_code}" -u "$6:$7" -H "Host: $4" "http://127.0.0.1:$5/")

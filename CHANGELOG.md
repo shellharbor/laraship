@@ -4,8 +4,18 @@ After every task with file changes, briefly record what changed and why: feature
 
 ## Unreleased
 
+### Fixed
+
+- Make the PHP address-change E2E fixture use Docker IPAM allocation instead of a static `--ip`, so it works on project networks without an explicitly configured subnet. Retry once if a lower free address lets PHP reuse its old IP. Always remove owned holders, restore PHP and reload Nginx on fixture failure to prevent cascading lifecycle-test failures.
+
+### Validation
+
+- Passed six isolated Docker address-change/recovery scenarios and the supplied PostgreSQL + Filament + Laravel 12 CI command: 44 checks passed and 8 configuration-dependent checks skipped. All 184 Bats unit checks, 54 Python tests, project-configured ShellCheck and continuity-skill validation passed.
+- Confirmed the same fixture repair with the supplied MySQL/config/Redis/queue/backup CI command: 50 checks passed and 2 configuration-dependent checks skipped, including PHP address changes, backup/restore, shared-proxy recovery and logical Elestio-to-official MySQL migration.
+
 ### AI-KIT
 
+- Refresh the current checkout, test navigation and continuity profile for the dynamic-IPAM fixture repair; distinguish this test-only failure from the earlier deployment-time HTTP 502 investigation.
 - 2026-10-05: separated the language policy: all authored project files and artifacts remain English, while chat with the user uses Russian for questions, plans, progress, explanations, review summaries, and final reports. Project artifacts shown in chat retain English. Synchronized instructions, bootstrap, context, continuity skill, engineering/router rules, README, wiki, and decision log to preserve this distinction.
 - 2026-10-05: replaced the former Terra-based defaults with the user's Adaptive Model Router: Luna for bounded tasks, Sol 6.1 for engineering, and justified Astra escalation. Optimizes total cost to a correct result rather than the price of one call.
 - 2026-10-05: added runtime capability verification, independent reasoning/service-tier/context decisions, standard/pro criteria, the large-input pricing boundary, cache/output budgets, conditional reviewers/delegation, diagnosed retries, and compact JSON router decisions. Distinguished policy fields from supported execution controls.
