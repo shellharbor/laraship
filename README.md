@@ -6,13 +6,14 @@
 [![Tests](https://github.com/shellharbor/laraship/actions/workflows/tests.yml/badge.svg)](https://github.com/shellharbor/laraship/actions/workflows/tests.yml)
 [![E2E](https://github.com/shellharbor/laraship/actions/workflows/e2e.yml/badge.svg)](https://github.com/shellharbor/laraship/actions/workflows/e2e.yml)
 [![Kubernetes](https://github.com/shellharbor/laraship/actions/workflows/kubernetes.yml/badge.svg)](https://github.com/shellharbor/laraship/actions/workflows/kubernetes.yml)
+[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-shellharbor%2Flaraship-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/shellharbor/laraship)
 [![CodeQL](https://github.com/shellharbor/laraship/actions/workflows/codeql.yml/badge.svg)](https://github.com/shellharbor/laraship/actions/workflows/codeql.yml)
 
 `deploy-laravel.sh` deploys a Laravel site, optionally with the Filament admin panel, on an Ubuntu server. Every site runs in its own set of Docker containers, and traffic is accepted by a shared reverse proxy, `nginxproxy`. The script installs Docker, creates the project from the `laravel/` template, installs Laravel, sets up PostgreSQL or MySQL (in a container or native on the host) and obtains a Let's Encrypt SSL certificate.
 
 The `laraship` folder is self-contained: it holds the deploy script, templates, management utilities, examples and a skill for Claude Code. Copy it to the server as a whole (for example, to `/opt/laraship/`) and run the scripts **on the server as root**. From your workstation (for example, Windows) connect to the server over SSH.
 
-LaraShip also has a **CLI Docker image** with the same Bash tools and their dependencies, plus a separate **Kubernetes backend** for existing applications built into immutable images. Native Bash remains supported. See [Docker runner](docs/CONTAINERS.md) and [Kubernetes deployment, image contract and scope](docs/KUBERNETES.md). Existing Compose projects and database volumes are not converted automatically.
+LaraShip also has a published **CLI Docker image**, [`shellharbor/laraship:1.2.2`](https://hub.docker.com/r/shellharbor/laraship), with the same Bash tools and their dependencies, plus a separate **Kubernetes backend** for existing applications built into immutable images. Native Bash remains supported. See [published-image examples](#run-from-docker-hub), [Docker runner](docs/CONTAINERS.md) and [Kubernetes deployment, image contract and scope](docs/KUBERNETES.md). Existing Compose projects and database volumes are not converted automatically.
 
 ---
 
@@ -22,7 +23,7 @@ LaraShip also has a **CLI Docker image** with the same Bash tools and their depe
 - [Architecture](#architecture)
 - [Requirements](#requirements)
 - [Quick start](#quick-start)
-- [LaraShip CLI image](docs/CONTAINERS.md)
+- [Run from Docker Hub](#run-from-docker-hub)
 - [Kubernetes backend](docs/KUBERNETES.md)
 - [Arguments](#arguments)
 - [Configuration file and versions](#configuration-file-and-versions)
@@ -223,6 +224,77 @@ Flag reference (root is not needed):
 ```bash
 bash /opt/laraship/deploy-laravel.sh --help
 ```
+
+---
+
+## Run from Docker Hub
+
+The published image `shellharbor/laraship:1.2.2` targets `linux/amd64`. Docker Engine must already be installed and running. The image packages the toolkit and its dependencies, so downloading the source folder is optional for this runner.
+
+### Pull, inspect and preview
+
+```bash
+docker pull shellharbor/laraship:1.2.2
+docker run --rm shellharbor/laraship:1.2.2 --version
+docker run --rm shellharbor/laraship:1.2.2 --help
+docker run --rm shellharbor/laraship:1.2.2 deploy --dry-run \
+  --slug shop --domain shop.example.com --db-type postgres --no-ssl
+```
+
+Help, version and dry run work without the server mounts. The following deployment and management commands run on the **target Linux server**; connect to it over SSH when working from Windows or macOS. The Compose runner requires the server's Docker Engine and Linux paths; Docker Desktop path mapping and remote Docker endpoints are unsupported.
+
+### Deploy and manage a project on Linux
+
+Create the host directories, then define this helper in the server's Bash shell:
+
+```bash
+sudo install -d -m 755 /var/www
+sudo install -d -m 700 /run/lock/laraship /var/backups/laraship
+
+laraship() {
+  sudo docker run --rm -it --network host \
+    --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
+    --mount type=bind,src=/var/www,dst=/var/www \
+    --mount type=bind,src=/run/lock/laraship,dst=/run/lock/laraship \
+    --mount type=bind,src=/var/backups/laraship,dst=/var/backups/laraship \
+    shellharbor/laraship:1.2.2 "$@"
+}
+```
+
+The helper uses host networking and identical bind paths so application containers, project files, locks and archives share the Linux server's state. Keep Docker's generated hostname. Docker socket access grants administrative control of the server; use a trusted image.
+
+Replace the domain and email below with your own, and point the domain's DNS at the server before requesting TLS. Deploy Laravel with PostgreSQL and the database backup module, then create a private project ZIP:
+
+```bash
+laraship deploy --slug shop --domain shop.example.com --db-type postgres \
+  --ssl-email admin@example.com --with backup --create-backup
+```
+
+For MySQL, use `--db-type mysql`. The same helper and mounts support project management:
+
+```bash
+laraship list
+laraship backup --slug shop now
+laraship backup --slug shop list
+laraship deactivate --slug shop
+laraship activate --slug shop
+```
+
+Projects remain under `/var/www/shop`; `--create-backup` ZIP archives are written to `/var/backups/laraship`. Database dumps from the backup module stay under the project's `backups/` directory. Generated credentials are saved in the project. Full configuration, Git update and recovery details are in the [Docker runner guide](docs/CONTAINERS.md).
+
+### Render Kubernetes manifests
+
+The same image can render manifests as your current user with a read-only root filesystem and writable temporary space:
+
+```bash
+docker run --rm --user "$(id -u):$(id -g)" --read-only --tmpfs /tmp \
+  shellharbor/laraship:1.2.2 kubernetes render \
+  --name shop --namespace shop --image registry.example.com/shop:1.0.0 \
+  --configmap shop-config-v1 --secret shop-secret-v1 --revision v1 \
+  > shop.k8s.yaml
+```
+
+Set `--image` to your application's immutable image. Rendering needs no Docker socket or kubeconfig; deployment requires cluster access and an explicit context. See the [Kubernetes deployment guide](docs/KUBERNETES.md). For reproducible use of the CLI itself, substitute its published image digest for the version tag as described in [Docker image publication](docs/CONTAINERS.md#publish-to-docker-hub-with-github-actions).
 
 ---
 

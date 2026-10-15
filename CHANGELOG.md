@@ -4,8 +4,14 @@ After every task with file changes, briefly record what changed and why: feature
 
 ## Unreleased
 
+### Documentation
+
+- Add a Docker Hub repository badge and README examples using the published shellharbor/laraship:1.2.2 CLI for inspection/dry run, Linux deployment/management and non-root Kubernetes rendering.
+- Explain how to diagnose a skipped Docker Hub job, distinguish GitHub Actions Variables from Secrets, recover from registry credential rejection, and retry publication for an existing release after correcting configuration.
+
 ### AI-KIT
 
+- Refresh verified GitHub v1.2.2/Docker Hub publication state and continuity evidence after recovering repository Variables and registry credentials, without changing the released version or tag.
 - 2026-10-05: separated the language policy: all authored project files and artifacts remain English, while chat with the user uses Russian for questions, plans, progress, explanations, review summaries, and final reports. Project artifacts shown in chat retain English. Synchronized instructions, bootstrap, context, continuity skill, engineering/router rules, README, wiki, and decision log to preserve this distinction.
 - 2026-10-05: replaced the former Terra-based defaults with the user's Adaptive Model Router: Luna for bounded tasks, Sol 6.1 for engineering, and justified Astra escalation. Optimizes total cost to a correct result rather than the price of one call.
 - 2026-10-05: added runtime capability verification, independent reasoning/service-tier/context decisions, standard/pro criteria, the large-input pricing boundary, cache/output budgets, conditional reviewers/delegation, diagnosed retries, and compact JSON router decisions. Distinguished policy fields from supported execution controls.

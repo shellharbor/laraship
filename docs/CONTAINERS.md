@@ -40,6 +40,14 @@ docker run --rm your-namespace/laraship:1.2.2 --version
 
 Use the reported `your-namespace/laraship@sha256:...` reference for reproducible deployment: a rerun can rebuild a version tag from changing base packages. Substitute that reference for `laraship:local` in the examples below. Publishing is performed inside Release rather than a second release-event workflow, because [events created by GITHUB_TOKEN generally do not trigger another workflow](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow). A Docker Hub failure leaves the existing GitHub release intact; rerun Release after correcting the registry configuration.
 
+### Troubleshooting a skipped publication
+
+If GitHub Release succeeds but the Docker Hub repository has no tags, inspect the **Publish the CLI image to Docker Hub** job. A `skipped` job with no steps means publication was disabled by its configuration condition. The job starts when either `DOCKERHUB_USERNAME` or `DOCKERHUB_IMAGE` exists in Actions **Variables**; both are required for successful configuration validation.
+
+Open **Settings → Secrets and variables → Actions → Variables** and create both repository variables from the table above. Saving `DOCKERHUB_USERNAME` only under **Secrets** does not populate `vars.DOCKERHUB_USERNAME`. Keep `DOCKERHUB_TOKEN` under **Secrets**. After correcting the settings, use **Actions → Release → Run workflow** on the default branch with the existing release tag. The workflow rechecks CI and existing release assets before publishing the image; configuration recovery does not require a new release version or moving the tag.
+
+If the job reaches **Log in to Docker Hub** and reports `unauthorized: incorrect username or password`, Docker Hub rejected the login/token pair. Create or update a [personal access token](https://docs.docker.com/security/access-tokens/personal-access-tokens/) for the account named in `DOCKERHUB_USERNAME`, grant Read/Write access, and replace the repository Secret `DOCKERHUB_TOKEN`. Then rerun the failed job. The secret value is entered directly in GitHub; its presence can be checked without retrieving its contents.
+
 ## PHP runtime builds
 
 Compose uses `laravel/.docker/php/php83.Dockerfile` by default. Its shared builder pins PECL versions/checksums and produces a runtime library list; the final image copies only PHP binaries, extensions/configuration and the pinned Composer binary into digest-pinned Debian Bookworm. It runs as UID/GID 1000 and supports a read-only root filesystem with writable application state and `/tmp`. FPM receives `SIGQUIT` directly through the exec entrypoint and has a 10-second process-control grace; Compose's 15-second stop grace allows escalation afterward. Tune both limits for longer requests. `fpm-healthcheck` checks local FastCGI liveness independently of the database; Compose enables it only on the FPM service, not the utility/worker roles.
