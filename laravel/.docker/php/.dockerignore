@@ -1,0 +1,5 @@
+*
+!php82.Dockerfile
+!php83.Dockerfile
+!build-extensions.sh
+!fpm-healthcheck.sh

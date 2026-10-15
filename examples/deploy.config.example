@@ -49,3 +49,7 @@ ENABLE_BASIC_AUTH=false
 
 NO_SSL=false
 CREATE_BACKUP=false
+
+# Optional deployment data receiver (the payload contains project credentials).
+# ENDPOINT=https://api.example.com/deployments
+# ALLOW_INSECURE_ENDPOINT=false  # Set true only to explicitly permit an HTTP receiver.

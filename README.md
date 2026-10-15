@@ -68,7 +68,7 @@ laraship/
 │   ├── docker-compose.yml
 │   ├── .config/nginx/_site.conf
 │   ├── .config/php/php.ini, project.ini
-│   └── .docker/                   # php/php81–83.Dockerfile, nginx/*.Dockerfile
+│   └── .docker/                   # pinned PHP 8.2/8.3 runtimes, nginx/*.Dockerfile
 ├── nginxproxy/                    # shared proxy template → /var/www/nginxproxy
 │   ├── nginx.conf
 │   ├── nginx.Dockerfile
@@ -112,7 +112,7 @@ The script looks for the `laravel/` and `nginxproxy/` templates next to itself, 
     │       ├── php.ini             # Copied, but not mounted by default (the line in compose is commented out)
     │       └── project.ini         # Project PHP overrides, mounted into the php container (empty by default; see --php-upload-max)
     ├── .docker/
-    │   ├── php/                    # php81/php82/php83.Dockerfile
+    │   ├── php/                    # php82/php83.Dockerfile, builder and FPM probe
     │   └── nginx/                  # nginx-1.27.2/nginx-1.29.1.Dockerfile
     └── public_html/                # Laravel code (created during installation)
 ```
@@ -125,14 +125,14 @@ Besides files, a project has:
 
 | Service | Container | Image | Purpose |
 |---|---|---|---|
-| `php` | `<slug>_php` | `php83.Dockerfile` (PHP 8.3-FPM) | Runs Laravel. Port 9000 is published only on `127.0.0.1:${PHP_PORT}` |
+| `php` | `<slug>_php` | `php83.Dockerfile` (PHP 8.3.35-FPM) | Runs Laravel as UID/GID 1000. Port 9000 is published only on `127.0.0.1:${PHP_PORT}`; a local FastCGI ping checks FPM liveness |
 | `nginx` | `<slug>_nginx` | `nginx-1.29.1.Dockerfile` | The project's web server, `root /var/www/html/public`. Ports `SITE_PORT_HTTP` → 80 and `SITE_PORT_HTTPS` → 443. Runs `nginx -s reload` every 6 hours to pick up a renewed certificate |
 | `db` | `<slug>_db` | Docker Official Image `postgres:17` or `mysql:8.4` | The project's database. Host port `DB_PORT` → 5432/3306. The template contains `db_postgres` and `db_mysql`: the unused one is removed, the chosen one is renamed to `db`. With `--db-native` both are removed |
 | `redis` | `<slug>_redis` | `redis:7-alpine` | Redis with a password (`--requirepass`) and AOF. Host port `REDIS_PORT` → 6379 |
 | `certbot` | `<slug>_certbot` | `certbot/certbot` | Certificate issuance. Profile `manual`: does not start on `up`, run it with `docker compose run --rm certbot ...` |
 | `certbot_renew` | `<slug>_certbot_renew` | `certbot/certbot` | Runs `certbot renew --webroot` every 12 hours (a loop set via `entrypoint`). nginx picks up the new certificate by itself thanks to the periodic reload |
 | `artisan` | `<slug>_artisan` | `php83.Dockerfile` | Utility: `docker compose run --rm artisan <command>`, runs as `www` (uid 1000) |
-| `composer` | `<slug>_composer` | `php83.Dockerfile` (+ composer 2) | Utility: `docker compose run --rm composer <command>`. Runs on the same PHP 8.3 as the application, as `www` (uid 1000), and checks package PHP requirements |
+| `composer` | `<slug>_composer` | `php83.Dockerfile` (+ Composer 2.10.3) | Utility: `docker compose run --rm composer <command>`. Runs on the same PHP 8.3 as the application, as `www` (uid 1000), and checks package PHP requirements |
 | `npm` | `<slug>_npm` | `node:current-alpine` | Utility: `npm ...`, runs as root |
 | `cron` | `<slug>_cron` | `php83.Dockerfile` | Runs `php artisan schedule:run` every 60 seconds |
 | `queue` | `<slug>_queue` | `php83.Dockerfile` | **Optional**, added by the `queue` module (`--with queue`): a queue worker (`php artisan queue:work`). Not part of the template |
@@ -186,7 +186,7 @@ You can also put the folder into a separate git repository and run `git clone` o
 **Or install a release.** Every release is published on GitHub as a tarball with a SHA-256 checksum:
 
 ```bash
-VERSION=1.1.1
+VERSION=1.2.0
 curl -fsSLO https://github.com/shellharbor/laraship/releases/download/v${VERSION}/laraship-${VERSION}.tar.gz
 curl -fsSLO https://github.com/shellharbor/laraship/releases/download/v${VERSION}/laraship-${VERSION}.tar.gz.sha256
 sha256sum -c laraship-${VERSION}.tar.gz.sha256
@@ -245,7 +245,8 @@ The table follows `parse_args` and the `--help` header of the script. An unknown
 | `--slug` | `SLUG` | random 8 chars `a-z0-9` | Project identifier: folder name, network, prefix of containers and volumes. Format `^[A-Za-z0-9][A-Za-z0-9_-]*$`, lowercase is recommended. If given, the domain is **not** changed |
 | `--laravel-version` | `X.Y` | `LARAVEL_VERSION` from `versions.env` (13.0) | Laravel version, installed as `laravel/laravel:^X.Y`. Minimum `12.0` (`LARAVEL_MIN_VERSION` in `versions.env`): Laravel 10.x and 11.x are no longer supported and are refused up front |
 | `--create-backup` | — | off | After deployment, create `/tmp/<slug>_<YYYYmmdd_HHMMSS>.zip` from the project folder |
-| `--endpoint` | `URL` | — | Send the project data as JSON with PUT (see [below](#sending-data-to-an-endpoint)) |
+| `--endpoint` | `URL` | — | Send the project data as JSON with PUT to an absolute HTTPS URL (see [below](#sending-data-to-an-endpoint)) |
+| `--allow-insecure-endpoint` | — | off | Explicitly permit an HTTP endpoint; its project credentials travel without transport encryption. TLS verification stays enabled for HTTPS |
 | `--type` | `laravel` | — | Only for compatibility with the old `deploy.sh`. Any other value is an error. Do not use it in new commands |
 
 ### Modules
@@ -390,7 +391,15 @@ POSTGRES_IMAGE=postgres:17             # Docker Official Image, PostgreSQL 17
 MYSQL_IMAGE=mysql:8.4                  # Docker Official Image, MySQL 8.4 LTS
 ```
 
-Editing this file selects versions for **new deployments**. Database major upgrades also need compatibility checks and a data migration; see [Moving an existing database to the official images](#moving-an-existing-database-to-the-official-images). These tags follow their explicit version lines, rather than `latest`; they are not digest pins. `--laravel-version` (or `LARAVEL_VERSION` in a `--config` file) overrides the default for a single deployment. The file uses the same strict parsing (never sourced); an invalid value or an unknown key stops the script. If the file is missing, the built-in defaults above are used. PHP (8.3), Redis, nginx, Node and the other service images are still chosen by the template Dockerfiles and `laravel/docker-compose.yml`.
+Editing this file selects versions for **new deployments**. Database major upgrades also need compatibility checks and a data migration; see [Moving an existing database to the official images](#moving-an-existing-database-to-the-official-images). These tags follow their explicit version lines, rather than `latest`; they are not digest pins. `--laravel-version` (or `LARAVEL_VERSION` in a `--config` file) overrides the default for a single deployment. The file uses the same strict parsing (never sourced); an invalid value or an unknown key stops the script. If the file is missing, the built-in defaults above are used. PHP, Redis, nginx, Node and the other service images are chosen by the template Dockerfiles and `laravel/docker-compose.yml`. The PHP build pins are described below.
+
+### PHP runtime images
+
+The Compose templates pin PHP **8.3.35** (default) and **8.2.34** (manual alternative for compatible applications), Composer **2.10.3**, phpredis **6.3.0** and APCu **5.1.28**. PHP, Composer and the Debian Bookworm runtime use multi-architecture image digests. The shared `laravel/.docker/php/build-extensions.sh` verifies the PECL archives against fixed SHA-256 checksums before compiling them.
+
+Compilation happens in a separate stage. The runtime contains PHP CLI/FPM, its existing extensions, required shared libraries, Composer, Git/SSH, curl/OpenSSL, ZIP/unzip and a FastCGI probe. It excludes compilers, development headers, PECL, editors, debugging tools and optional mail/media/antivirus services. Applications using those optional commands or system fonts need an explicit custom build or external service. Bookworm packages still receive repository updates; these pins do not promise byte-for-byte identical rebuilds. Update the pins and PECL checksums deliberately and rerun the image checks. See [ADR-0007](docs/adr/0007-pinned-php-runtime.md).
+
+FPM runs as UID/GID 1000 and logs to the existing stdout/stderr destinations. On `SIGQUIT`, `process_control_timeout=10s` gives active requests time to finish; Compose permits 15 seconds before forcing shutdown. Longer-running requests require deliberately increasing both limits. Its local `/_laraship/fpm-ping` FastCGI probe checks the process independently of the database. Only the Compose `php` service uses this healthcheck; Composer, Artisan, cron and workers share the image with different commands. Authenticated DB and application HTTP readiness checks remain in the deployer. Application code/configuration/storage stays external under the existing Compose contract; Kubernetes continues to use its separate [application-image template](docs/KUBERNETES.md).
 
 ## Presets and dry run
 
@@ -1107,11 +1116,18 @@ If you choose to remove a failed first installation, `remove.sh` handles a share
 
 ## Sending data to an endpoint
 
-With `--endpoint URL`, after the SSL attempt (and before the backup) the script runs:
+With `--endpoint URL`, after the SSL attempt (and before the backup) the script sends a JSON PUT request to the configured recipient. HTTPS is required by default; malformed URLs, other protocols and embedded URL credentials are refused during argument validation, before project creation. Redirects are never followed.
 
 ```bash
-curl -X PUT -H "Content-Type: application/json" -d '<JSON>' URL
+sudo bash deploy-laravel.sh --domain app.example.com --db-type postgres --no-ssl \
+  --endpoint https://api.example.com/deployments
+
+# Explicitly allow an unencrypted endpoint, for example a local test receiver.
+sudo bash deploy-laravel.sh --domain app.example.com --db-type postgres --no-ssl \
+  --endpoint http://127.0.0.1:18090/deploy --allow-insecure-endpoint
 ```
+
+Configuration files support `ENDPOINT=...` and `ALLOW_INSECURE_ENDPOINT=true`. Existing HTTP integrations must switch to HTTPS or explicitly enable this opt-in when upgrading the toolkit. The flag does not disable HTTPS certificate verification.
 
 Request body (values are fake; a sample file is [examples/endpoint-payload.json](examples/endpoint-payload.json)):
 
@@ -1156,8 +1172,9 @@ Notes:
 - `ssl.enabled` reflects the flag (`--no-ssl` or not), not whether a certificate was actually obtained.
 - Without Basic Auth the fields `basic_auth.user` and `basic_auth.password` are empty strings.
 - There is no Filament data, no native-DB flag and no root passwords in the JSON.
-- Python JSON serialization preserves quotes, backslashes and Unicode. Curl reads the payload from stdin with a 5-second connection timeout and a 20-second total timeout.
-- A non-2xx response produces only a warning. The request carries all passwords in plain text, so use HTTPS endpoints only.
+- Python JSON serialization preserves quotes, backslashes and Unicode. Curl reads a quoted configuration containing the URL and JSON from stdin, with a 5-second connection timeout and a 20-second total timeout; neither appears in its process arguments.
+- Endpoint logs contain only a validated HTTP status or a generic connection/TLS error. URL paths/query tokens, payloads, response bodies and raw client diagnostics are not logged. The user's curl configuration is ignored so it cannot enable tracing, redirects or insecure TLS. See the [curl configuration documentation](https://curl.se/docs/manpage.html#-K).
+- A non-2xx response, redirect or transport failure produces a warning and does not undo the deployment. HTTP requires the explicit opt-in above; HTTPS protects the credentials in transit, but the selected receiver still receives them and must be trusted.
 
 ---
 
@@ -1322,12 +1339,12 @@ Servers deployed with an old version, without the proxy's `nginx.conf` fix, reje
 
 ### Other
 
-- **502 Bad Gateway.** The `<slug>_php` container is not running: look at `docker compose ps` and `docker compose logs php`.
+- **502 Bad Gateway.** Check `docker compose ps` and `docker compose logs php` from the project folder. A recreated PHP container can also leave Nginx using its previous address; validate and refresh it with `docker compose exec -T nginx nginx -t && docker compose exec -T nginx nginx -s reload`. New deployments perform this refresh after application/module setup and before HTTP readiness. Failed E2E deployment artifacts include the original PHP/Nginx state and upstream error logs.
 - **`http://domain` returns 404.** Current templates serve the application over HTTP before TLS is enabled. Check the application route, project Nginx logs and the site's proxy config. Older copied templates may serve only ACME over HTTP; migrate them as described in "Updating an already deployed server".
 - **The certificate was renewed, but the browser sees the old one.** The project nginx and `nginxproxy` reload certificates by themselves every 6 hours. To apply a new certificate immediately, run `docker exec nginxproxy nginx -s reload` and `docker compose exec nginx nginx -s reload`. On servers deployed with an old version there is no periodic reload until you perform the steps from [Updating an already deployed server](#updating-an-already-deployed-server). The renewal log: `docker compose logs certbot_renew`.
 - **A port is busy after activating an old project.** Auto-selection considers only ports that are being listened on right now. Ports of stopped projects may be handed out to a new one. If you have deactivated projects, set ports explicitly.
 - **Scheduler tasks run irregularly.** `cron` calls `schedule:run` every 60 seconds. Projects created by an older version used 600 seconds: change `sleep 600` to `sleep 60` in the project's `docker-compose.yml` and run `docker compose up -d cron`.
-- **How to change the PHP version.** Change `dockerfile: php83.Dockerfile` for the `php`, `artisan`, `composer` and `cron` services to `php81.Dockerfile` or `php82.Dockerfile` and run `docker compose up -d --build`. Composer is built into all three Dockerfiles.
+- **How to change the PHP version.** PHP 8.3 is the default and is required for Laravel 13. For a compatible Laravel 12 application, change `dockerfile: php83.Dockerfile` to `php82.Dockerfile` for every PHP role, including `php`, `artisan`, `composer`, `cron` and any queue/Horizon service, then run `docker compose up -d --build`. Composer is built into both templates. The unsupported PHP 8.1 template has been removed; existing server copies are not changed automatically. Check the [Laravel compatibility table](https://laravel.com/framework/docs/13.x/releases#support-policy).
 - **`--repo`: `Failed to clone`.** Check the URL and branch, and for a private repository the deploy key (read access, SSH URL). Try the same clone by hand: `GIT_SSH_COMMAND='ssh -i <key> -o IdentitiesOnly=yes' git clone <url>`.
 - **`--repo`: `composer install failed`.** The application needs PHP extensions or a PHP version the php image does not provide (PHP 8.3 by default; see "How to change the PHP version" above), or a private package that composer cannot reach.
 - **`update.sh`: `public_html has uncommitted changes to tracked files`.** Someone edited tracked files on the server. Commit, stash or discard the changes (`git -C /var/www/<slug>/public_html status`).
@@ -1426,9 +1443,9 @@ Replacing the toolkit does not automatically migrate an existing `/var/www/nginx
 - `certbot_renew`: replace `command: >` with `entrypoint: >`. The line with `docker kill --signal=HUP` can be removed, it does not work.
 - `composer`: replace the service with the variant from the template (built from `php83.Dockerfile`, `entrypoint: [ 'composer' ]`, without `--ignore-platform-reqs`).
 - `cron`: `dockerfile: php82.Dockerfile` → `php83.Dockerfile`.
-- Copy the updated Dockerfiles with the built-in composer:
+- Copy the complete PHP build context, including shared scripts and `.dockerignore`, then rebuild deliberately. Copying only the Dockerfiles is no longer sufficient:
   ```bash
-  cp /opt/laraship/laravel/.docker/php/php8*.Dockerfile /var/www/<slug>/.docker/php/
+  cp -a /opt/laraship/laravel/.docker/php/. /var/www/<slug>/.docker/php/
   cd /var/www/<slug> && docker compose up -d --build
   ```
 
@@ -1535,4 +1552,6 @@ The E2E workflow has two more jobs, `e2e-repo` (for `--repo` and `update.sh`) an
 
 The badges at the top of the file point to the `shellharbor/laraship` repository; if you rename or fork it, update the paths in all badge links.
 
-Release publication requires completed successful `lint.yml`, `tests.yml`, `e2e.yml`, `codeql.yml` and `kubernetes.yml` main/master push runs for the exact tagged commit. Missing, failed or running checks block publication; an earlier green commit is insufficient. Prepare VERSION and matching release notes deliberately before tagging. Major default changes remain in Unreleased until a release is assigned.
+Release publication requires completed successful `lint.yml`, `tests.yml`, `e2e.yml`, `codeql.yml` and `kubernetes.yml` main/master push runs for the exact tagged commit. Missing, failed or running checks block publication; an earlier green commit is insufficient. Prepare VERSION and matching release notes deliberately before tagging. The next prepared release is **1.2.0**; see its [changes and upgrade notes](CHANGELOG.md#120). Unassigned changes remain under Unreleased.
+
+Publication can be retried safely: matching existing assets are verified, missing assets are uploaded, and published files and release notes are preserved. Different or incomplete assets, draft releases and moved tags are refused. Legacy assets without digest metadata are downloaded for comparison. Jobs for the same tag are serialized. After the updated workflow reaches the default branch, use **Actions → Release → Run workflow** with an existing tag such as `v1.1.1` to complete a release created manually; the selected workflow supplies the current publisher/CI policy while the checkout and archive use the requested tag. The same exact-commit CI and version checks apply. See [ADR-0006](docs/adr/0006-idempotent-release-publication.md).

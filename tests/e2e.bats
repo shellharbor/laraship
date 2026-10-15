@@ -104,8 +104,19 @@ setup_file() {
     export DEPLOY_LOG="${BATS_FILE_TMPDIR}/deploy.log"
     set +e
     bash "${DEPLOY}" "${args[@]}" >"${DEPLOY_LOG}" 2>&1
-    echo "$?" >"${BATS_FILE_TMPDIR}/deploy.exit"
+    local deploy_exit="$?"
+    echo "$deploy_exit" >"${BATS_FILE_TMPDIR}/deploy.exit"
     set -e
+    if [ "$deploy_exit" != 0 ]; then
+        # Capture the original failure before lifecycle tests recreate or remove containers.
+        {
+            echo '==> PHP/Nginx failure diagnostics'
+            docker inspect -f '{{.Name}} {{.State.Status}} {{json .NetworkSettings.Networks}}' "${SLUG}_php" "${SLUG}_nginx"
+            docker logs --tail 30 "${SLUG}_php"
+            docker logs --tail 30 "${SLUG}_nginx"
+            docker exec "${SLUG}_nginx" sh -c 'tail -n 30 /var/log/nginx/error_warn.*.log'
+        } >"${BATS_FILE_TMPDIR}/http-diagnostics.log" 2>&1 || true
+    fi
 }
 
 teardown_file() {
@@ -117,6 +128,9 @@ teardown_file() {
     rm -f "/var/www/nginxproxy/sites/${SLUG}.conf" "/var/www/nginxproxy/sites/${SLUG}.conf.disabled"
     if [ -f "${BATS_FILE_TMPDIR}/deploy.log" ] && [ -n "${E2E_KEEP_LOG:-}" ]; then
         cp "${BATS_FILE_TMPDIR}/deploy.log" "${E2E_KEEP_LOG}" || true
+        if [ -f "${BATS_FILE_TMPDIR}/http-diagnostics.log" ]; then
+            cat "${BATS_FILE_TMPDIR}/http-diagnostics.log" >>"${E2E_KEEP_LOG}" || true
+        fi
     fi
 }
 
@@ -125,6 +139,9 @@ teardown_file() {
 @test "the script exited with code 0 and printed the summary" {
     [ "$(cat "${BATS_FILE_TMPDIR}/deploy.exit")" = "0" ] || {
         tail -n 40 "${DEPLOY_LOG}" | strip_ansi >&2
+        if [ -f "${BATS_FILE_TMPDIR}/http-diagnostics.log" ]; then
+            cat "${BATS_FILE_TMPDIR}/http-diagnostics.log" >&2
+        fi
         return 1
     }
     strip_ansi <"${DEPLOY_LOG}" | grep -q "Deployment completed"
@@ -308,6 +325,38 @@ teardown_file() {
     run docker exec "${SLUG}_php" php -r 'echo (int)ini_get("display_errors"), "/", (int)ini_get("expose_php"), "/", basename(php_ini_loaded_file());'
     [ "$status" = 0 ]
     [ "$output" = "0/0/php.ini" ]
+}
+
+@test "HTTP readiness recovers after PHP is recreated at a different address" {
+    run bash -c '
+        set -euo pipefail
+        project="$2"; slug="$3"; network="$slug"; holder="${slug}_fpm_ip_hold"
+        dc() { docker compose --project-directory "$project" -f "$project/docker-compose.yml" "$@"; }
+        old_ip=$(docker inspect -f "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}" "${slug}_php")
+        image=$(docker inspect -f "{{.Config.Image}}" "${slug}_nginx")
+        if docker container inspect "$holder" >/dev/null 2>&1; then
+            echo "Refusing an existing PHP address-reservation fixture: $holder" >&2
+            exit 1
+        fi
+        holder_created=false
+        # Always restore routing for subsequent lifecycle checks, including a failed assertion.
+        trap '\''if [[ "$holder_created" == true ]]; then docker rm -f "$holder" >/dev/null 2>&1 || true; fi; docker exec "${slug}_nginx" nginx -s reload >/dev/null 2>&1 || true'\'' EXIT
+        dc rm -sf php >/dev/null
+        # Reserve the previous address so the recreated PHP container cannot reuse it.
+        docker run -d --name "$holder" --network "$network" --ip "$old_ip" --entrypoint sleep "$image" 120 >/dev/null
+        holder_created=true
+        dc up -d --no-deps php >/dev/null
+        new_ip=$(docker inspect -f "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}" "${slug}_php")
+        [[ -n "$old_ip" && -n "$new_ip" && "$old_ip" != "$new_ip" ]]
+        printf "PHP address changed from %s to %s\n" "$old_ip" "$new_ip"
+        code=$(curl --max-time 5 -s -o /dev/null -w "%{http_code}" -u "$6:$7" -H "Host: $4" "http://127.0.0.1:$5/")
+        [[ "$code" == 502 ]] || { echo "Expected stale upstream HTTP 502, received $code" >&2; exit 1; }
+        source "$1"
+        PROJECT_DIR="$project"; SLUG="$slug"; DOMAIN="$4"; PORT_HTTP="$5"
+        ENABLE_BASIC_AUTH=true; AUTH_USER="$6"; AUTH_PASSWORD="$7"
+        check_project_http
+    ' _ "$DEPLOY" "$PROJECT" "$SLUG" "$DOMAIN" "$PORT_HTTP" "$AUTH_USER" "$AUTH_PASS"
+    [ "$status" = 0 ]
 }
 
 @test "cron runs schedule:run every 60 seconds" {

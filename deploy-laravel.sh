@@ -34,7 +34,8 @@ set -euo pipefail
 #   --slug SLUG                  Project identifier (random by default)
 #   --laravel-version X.Y        Laravel version (minimum LARAVEL_MIN_VERSION in versions.env, 12.0; default 13.0)
 #   --create-backup              Create a zip archive of the project in /tmp after deployment
-#   --endpoint URL               Send project data (JSON, PUT) to URL
+#   --endpoint URL               Send project data (JSON, PUT) to an HTTPS URL
+#   --allow-insecure-endpoint    Explicitly permit HTTP for --endpoint (unencrypted credentials)
 #
 # Filament:
 #   --install-filament           Install filament/filament and the /admin panel
@@ -198,7 +199,7 @@ load_versions() {
 # and false/no/0/off (or an empty value) to leave the flag off. The file is parsed line by line and
 # never sourced. Flags given on the command line override the file.
 CONFIG_VALUE_FLAGS=(with backup-keep slug domain laravel-version filament-email filament-name filament-password port-http port-https port-php port-redis port-postgres port-mysql redis-password db-type db-mysql-name db-mysql-user db-mysql-password db-mysql-root-password db-postgres-name db-postgres-user db-postgres-password db-root-password auth-user auth-password ssl-email endpoint php-upload-max repo branch deploy-key post-deploy)
-CONFIG_BOOL_FLAGS=(install-filament create-backup db-native create-dhparam enable-basic-auth no-ssl obtain-ssl bind-local use-redis queue-worker)
+CONFIG_BOOL_FLAGS=(install-filament create-backup db-native create-dhparam enable-basic-auth no-ssl obtain-ssl bind-local use-redis queue-worker allow-insecure-endpoint)
 CONFIG_ARGS=()
 DRY_RUN=false
 USED_PRESETS=()
@@ -707,6 +708,7 @@ AUTH_PASSWORD=""
 OBTAIN_SSL=true
 SSL_EMAIL=""
 ENDPOINT=""
+ALLOW_INSECURE_ENDPOINT=false
 FILAMENT_EMAIL=""
 FILAMENT_NAME=""
 FILAMENT_PASSWORD=""
@@ -762,6 +764,7 @@ parse_args() {
             --no-ssl)                 OBTAIN_SSL=false;            shift 1 ;;
             --ssl-email)              SSL_EMAIL="$2";              shift 2 ;;
             --endpoint)               ENDPOINT="$2";               shift 2 ;;
+            --allow-insecure-endpoint) ALLOW_INSECURE_ENDPOINT=true; shift 1 ;;
             --repo)                   REPO_URL="$2";               shift 2 ;;
             --branch)                 REPO_BRANCH="$2";            shift 2 ;;
             --deploy-key)             DEPLOY_KEY="$2";             shift 2 ;;
@@ -776,6 +779,7 @@ parse_args() {
         esac
     done
 
+    validate_endpoint
     [[ -z "$DOMAIN" ]]  && error "--domain is not specified"
     [[ -z "$DB_TYPE" ]] && error "--db-type is not specified"
 
@@ -1623,6 +1627,13 @@ check_project_http() {
     local ATTEMPT CODE CREDENTIALS="$AUTH_USER:$AUTH_PASSWORD"
     CREDENTIALS=${CREDENTIALS//\\/\\\\}
     CREDENTIALS=${CREDENTIALS//\"/\\\"}
+    # Compose/module setup may recreate PHP; Nginx resolves a static FastCGI name only on reload.
+    info "Validating and reloading project Nginx before HTTP readiness..."
+    (
+        cd "$PROJECT_DIR" || exit 1
+        timeout 10 docker compose exec -T nginx nginx -t &&
+            timeout 10 docker compose exec -T nginx nginx -s reload
+    ) || error "Cannot validate/reload project Nginx; project data retained and shared proxy unchanged"
     info "Checking the project's HTTP response..."
     for ATTEMPT in {1..10}; do
         CODE=$({
@@ -2025,31 +2036,48 @@ restart_nginxproxy() {
 }
 
 # ==================== Send project data to the endpoint ====================
+validate_endpoint() {
+    [[ -n "$ENDPOINT" ]] || return 0
+    local OPTIONS=()
+    [[ "$ALLOW_INSECURE_ENDPOINT" != true ]] || OPTIONS+=(--allow-http)
+    printf '%s' "$ENDPOINT" | python3 "$SCRIPT_DIR/lib/endpoint.py" --validate-url "${OPTIONS[@]}" ||
+        error "Invalid endpoint configuration"
+}
+
 send_project_data() {
     [[ -n "$ENDPOINT" ]] || return 0
-    info "Sending project data to endpoint: $ENDPOINT..."
-    local DB_PORT_VALUE DB_NAME DB_USER DB_PASS RESPONSE HTTP_CODE RESPONSE_BODY
+    validate_endpoint
+    info "Sending project data to the configured endpoint..."
+    local DB_PORT_VALUE DB_NAME DB_USER DB_PASS HTTP_CODE CURL_CONFIG PROTOCOLS='=https' OPTIONS=()
+    if [[ "$ALLOW_INSECURE_ENDPOINT" == true ]]; then
+        OPTIONS+=(--allow-http)
+        PROTOCOLS='=http,https'
+    fi
     if [[ "$DB_TYPE" == postgres ]]; then
         DB_PORT_VALUE="$PORT_POSTGRES"; DB_NAME="$DB_POSTGRES_NAME"; DB_USER="$DB_POSTGRES_USER"; DB_PASS="$DB_POSTGRES_PASSWORD"
     else
         DB_PORT_VALUE="$PORT_MYSQL"; DB_NAME="$DB_MYSQL_NAME"; DB_USER="$DB_MYSQL_USER"; DB_PASS="$DB_MYSQL_PASSWORD"
     fi
-    local JSON_DATA
-    JSON_DATA=$(printf '%s\0' "$SLUG" "$DOMAIN" "$APP_TYPE" "$LARAVEL_VERSION" "$DB_TYPE" \
+    CURL_CONFIG=$(printf '%s\0' "$ENDPOINT" "$SLUG" "$DOMAIN" "$APP_TYPE" "$LARAVEL_VERSION" "$DB_TYPE" \
         "$PORT_HTTP" "$PORT_HTTPS" "$PORT_PHP" "$PORT_REDIS" "$REDIS_PASSWORD" \
         "$DB_PORT_VALUE" "$DB_NAME" "$DB_USER" "$DB_PASS" "$ENABLE_BASIC_AUTH" "$AUTH_USER" "$AUTH_PASSWORD" \
-        "$OBTAIN_SSL" "$SSL_EMAIL" "$WWW_DIR/$SLUG" | python3 "$SCRIPT_DIR/lib/endpoint.py") ||
+        "$OBTAIN_SSL" "$SSL_EMAIL" "$WWW_DIR/$SLUG" | python3 "$SCRIPT_DIR/lib/endpoint.py" --curl-config "${OPTIONS[@]}") ||
         error "Cannot serialize endpoint JSON"
-    RESPONSE=$(printf '%s' "$JSON_DATA" | curl --connect-timeout 5 --max-time 20 -X PUT \
-        -H "Content-Type: application/json" --data-binary @- -w '\n%{http_code}' -sS "$ENDPOINT" 2>&1) || true
-    HTTP_CODE=$(tail -n1 <<< "$RESPONSE")
-    RESPONSE_BODY=$(head -n-1 <<< "$RESPONSE")
-    if [[ "$HTTP_CODE" =~ ^2[0-9][0-9]$ ]]; then
-        success "Data sent to the endpoint successfully (HTTP $HTTP_CODE)"
+    # Ignore user curl configuration (tracing, redirects or insecure TLS). URL and JSON
+    # stay on stdin; discard response bodies and diagnostics that might echo credentials.
+    if HTTP_CODE=$(printf '%s\n' "$CURL_CONFIG" | curl --disable --config - --globoff \
+        --proto "$PROTOCOLS" --proto-redir '=https' --no-location --connect-timeout 5 --max-time 20 \
+        -X PUT -H "Content-Type: application/json" --output /dev/null --write-out '%{http_code}' --silent 2>/dev/null); then
+        if [[ "$HTTP_CODE" =~ ^2[0-9][0-9]$ ]]; then
+            success "Data sent to the endpoint successfully (HTTP $HTTP_CODE)"
+        elif [[ "$HTTP_CODE" =~ ^[0-9]{3}$ ]]; then
+            warn "Failed to send data to the endpoint (HTTP $HTTP_CODE)"
+        else
+            warn "Failed to send data to the endpoint (invalid HTTP status)"
+        fi
     else
-        warn "Failed to send data to the endpoint (HTTP $HTTP_CODE)"
+        warn "Failed to send data to the endpoint (connection or TLS error)"
     fi
-    [[ -z "$RESPONSE_BODY" ]] || info "Server response: $RESPONSE_BODY"
 }
 
 # ==================== Project backup archive creation ====================

@@ -13,6 +13,19 @@ docker run --rm laraship:local deploy --dry-run --domain shop.example.com --db-t
 
 The image is built locally; these changes do not publish a registry image. BuildKit is required. Docker CLI 29.8.2, kubectl 1.37.0 and Ubuntu 24.04 are the image's supported baseline. The native Kubernetes adapter requires Python 3.10+ and kubectl compatible with the target cluster.
 
+## PHP runtime builds
+
+Compose uses `laravel/.docker/php/php83.Dockerfile` by default. Its shared builder pins PECL versions/checksums and produces a runtime library list; the final image copies only PHP binaries, extensions/configuration and the pinned Composer binary into digest-pinned Debian Bookworm. It runs as UID/GID 1000 and supports a read-only root filesystem with writable application state and `/tmp`. FPM receives `SIGQUIT` directly through the exec entrypoint and has a 10-second process-control grace; Compose's 15-second stop grace allows escalation afterward. Tune both limits for longer requests. `fpm-healthcheck` checks local FastCGI liveness independently of the database; Compose enables it only on the FPM service, not the utility/worker roles.
+
+```bash
+docker build -t laraship-php83:local -f laravel/.docker/php/php83.Dockerfile laravel/.docker/php
+python3 tests/php-image-smoke.py --image laraship-php83:local --variant 83
+docker build -t laraship-php82:local -f laravel/.docker/php/php82.Dockerfile laravel/.docker/php
+python3 tests/php-image-smoke.py --image laraship-php82:local --variant 82
+```
+
+These checks create private Docker networks/volumes and temporary PostgreSQL/MySQL containers, test real Laravel installation/migrations, then remove their own resources. They do not publish ports or require privileged containers. The E2E workflow runs both variants. See [PHP pins and upgrade notes](../README.md#php-runtime-images) and [ADR-0007](adr/0007-pinned-php-runtime.md). The Compose base image accepts external application code; the Kubernetes backend retains its separate standalone application build and workload probes.
+
 ## Compose on a Linux server
 
 Docker must already be installed and running on the target Linux server. Create these host directories first:

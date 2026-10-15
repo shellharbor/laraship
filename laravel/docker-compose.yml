@@ -5,6 +5,13 @@ services:
       dockerfile: php83.Dockerfile
     container_name: {SLUG}_php
     restart: always
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "fpm-healthcheck"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
     ports:
       # localhost only: nginx reaches PHP over the internal network, and FastCGI exposed publicly = code execution
       - "127.0.0.1:${PHP_PORT}:9000"

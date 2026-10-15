@@ -1,82 +1,40 @@
-FROM php:8.2-fpm
+# Build context: this directory. Application code/configuration is supplied separately.
+FROM composer:2.10.3@sha256:af98f42dfff7c68ba8d53c2164fd9fde1087b7d449514baa38c418b1f6bc4bac AS composer
+FROM php:8.2.34-fpm-bookworm@sha256:76ba16ca0fa4b202b57299d3bd96672c0ddc98fa81dc95fd495696723b52584a AS build
+COPY build-extensions.sh /usr/local/src/laraship-build-extensions
+RUN /bin/bash /usr/local/src/laraship-build-extensions \
+    mbstring zip exif pcntl ctype xml intl pdo mysqli pdo_mysql pgsql pdo_pgsql gd bcmath sockets dom soap
 
-
-RUN apt update && apt install -y \
-    libzip-dev libpng-dev libjpeg-dev libfreetype6-dev \
-    libonig-dev libicu-dev libpq-dev libwebp-dev git \
-    libxml2-dev
-
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp
-
-RUN docker-php-ext-install \
-    mbstring \
-    zip \
-    exif \
-    pcntl \
-    ctype \
-    xml \
-    intl \
-    pdo \
-    mysqli \
-    pdo_mysql \
-    pgsql \
-    pdo_pgsql \
-    gd \
-    bcmath \
-    sockets \
-    dom \
-    soap
-
-RUN docker-php-ext-enable mysqli pdo_mysql pgsql pdo_pgsql
-
-RUN pecl install redis apcu && \
-    docker-php-ext-enable redis apcu
-
-RUN apt clean && rm -rf /var/lib/apt/lists/*
-
-RUN apt update && apt install -y \
-    build-essential \
-    mc nano vim \
-    zip unzip libzip-dev \
-    openssl wget curl libcurl4-openssl-dev net-tools \
-    sendmail mailutils \
-    libfreetype6-dev libpng-dev libjpeg62-turbo-dev libjpeg-dev libgd-dev \
-    jpegoptim optipng pngquant gifsicle \
-    locales \
-    git \
-    libonig-dev aspell \
-    ghostscript \
-    clamav \
-    apache2-utils \
-    libbz2-dev \
-    libkrb5-dev \
-    libmcrypt-dev libssl-dev \
-    libreadline-dev libxslt1-dev zlib1g-dev \
-    python3-dev python3-psycopg2 \
-    libpq-dev libfcgi-dev \
-    gnupg ca-certificates \
-    htop tree jq \
-    supervisor procps \
-    grep sed gawk \
-    telnet netcat-openbsd \
-    valgrind \
-    bzip2 xz-utils \
-    lsof strace \
-    webp libwebp-dev \
-    fontconfig fonts-dejavu-core \
-    libicu-dev \
-    && apt clean && rm -rf /var/lib/apt/lists/*
-
-# Composer for the composer service in docker-compose.yml
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
-RUN groupadd -g 1000 www \
-    && useradd -u 1000 -ms /bin/bash -g www www \
-    && chown -R www:www /var/www
-
+# A clean runtime avoids carrying compiler/header packages from the PHP build image.
+FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587 AS runtime
+COPY --from=build /runtime-packages.txt /tmp/runtime-packages.txt
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        ca-certificates curl git openssh-client openssl zip unzip libfcgi-bin \
+        $(cat /tmp/runtime-packages.txt); \
+    rm -rf /var/lib/apt/lists/* /tmp/runtime-packages.txt; \
+    groupadd -g 1000 www; \
+    useradd -u 1000 -m -s /bin/bash -g www www; \
+    mkdir -p /var/www/html; \
+    chown -R www:www /var/www
+COPY --from=build /usr/local/bin/php /usr/local/bin/php
+COPY --from=build /usr/local/sbin/php-fpm /usr/local/sbin/php-fpm
+COPY --from=build /usr/local/bin/docker-php-entrypoint /usr/local/bin/docker-php-entrypoint
+COPY --from=build /usr/local/etc/php/ /usr/local/etc/php/
+COPY --from=build /usr/local/etc/php-fpm.conf /usr/local/etc/php-fpm.conf
+COPY --from=build /usr/local/etc/php-fpm.d/ /usr/local/etc/php-fpm.d/
+COPY --from=build /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
+COPY --from=composer /usr/bin/composer /usr/bin/composer
+COPY fpm-healthcheck.sh /usr/local/bin/fpm-healthcheck
+ENV PHP_INI_DIR=/usr/local/etc/php
 RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
-    && sed -i 's/^expose_php = On/expose_php = Off/' "$PHP_INI_DIR/php.ini"
-
-USER www
-
+    && sed -i 's/^expose_php = On/expose_php = Off/' "$PHP_INI_DIR/php.ini" \
+    && printf '[global]\nprocess_control_timeout = 10s\n[www]\nping.path = /_laraship/fpm-ping\nping.response = pong\n' > /usr/local/etc/php-fpm.d/zz-laraship-runtime.conf \
+    && chmod 755 /usr/local/bin/fpm-healthcheck
+WORKDIR /var/www/html
+USER 1000:1000
+EXPOSE 9000
+STOPSIGNAL SIGQUIT
+ENTRYPOINT ["docker-php-entrypoint"]
 CMD ["php-fpm"]

@@ -94,23 +94,71 @@ PY
 @test "endpoint preserves literal secrets and uses stdin with finite timeouts" {
     export TEST_SECRET=$'quoted"\\value # ${LITERAL}'
     run bash -c '
-        source "$1"; ENDPOINT=https://example.test; SLUG=site; DOMAIN=x.test; APP_TYPE=laravel; LARAVEL_VERSION=13.0
+        source "$1"; ENDPOINT=https://example.test/?token=PRIVATE_URL_TOKEN; SLUG=site; DOMAIN=x.test; APP_TYPE=laravel; LARAVEL_VERSION=13.0
         DB_TYPE=postgres; DB_POSTGRES_NAME=db; DB_POSTGRES_USER=user; DB_POSTGRES_PASSWORD="$TEST_SECRET"
         PORT_HTTP=8080; PORT_HTTPS=8443; PORT_PHP=9000; PORT_REDIS=6379; PORT_POSTGRES=5432
         REDIS_PASSWORD="$TEST_SECRET"; AUTH_PASSWORD="$TEST_SECRET"; AUTH_USER=test
-        curl() { printf "%s\n" "$@" > "$HARDEN_WORK/args"; cat > "$HARDEN_WORK/payload"; printf "\n200"; }
+        curl() { printf "%s\n" "$@" > "$HARDEN_WORK/args"; cat > "$HARDEN_WORK/curl-config"; printf "200"; }
         send_project_data' _ "$DEPLOY"
     [ "$status" = 0 ]
-    python3 - "$HARDEN_WORK/payload" <<'PY'
+    python3 - "$HARDEN_WORK/curl-config" <<'PY'
 import json, os, sys
-data = json.load(open(sys.argv[1]))
+config = open(sys.argv[1]).read().splitlines()
+assert json.loads(config[0].removeprefix("url = ")) == "https://example.test/?token=PRIVATE_URL_TOKEN"
+data = json.loads(json.loads(config[1].removeprefix("data-binary = ")))
 assert data["database"]["password"] == data["redis"]["password"] == data["basic_auth"]["password"] == os.environ["TEST_SECRET"]
 assert data["ports"]["http"] == 8080
 PY
     grep -qx -- --max-time "$HARDEN_WORK/args"
     grep -qx -- --connect-timeout "$HARDEN_WORK/args"
-    grep -qx '@-' "$HARDEN_WORK/args"
+    grep -qx -- --disable "$HARDEN_WORK/args"
+    grep -qx -- --config "$HARDEN_WORK/args"
+    grep -qx -- '=https' "$HARDEN_WORK/args"
+    grep -qx -- --no-location "$HARDEN_WORK/args"
     if grep -qF "$TEST_SECRET" "$HARDEN_WORK/args"; then return 1; fi
+    if grep -qF PRIVATE_URL_TOKEN "$HARDEN_WORK/args"; then return 1; fi
+    [[ "$output" != *PRIVATE_URL_TOKEN* ]]
+}
+
+@test "endpoint URL validation runs before project creation and permits HTTP only by explicit opt-in" {
+    run_deploy --domain x.test --db-type postgres --no-ssl --dry-run --endpoint http://example.test/PRIVATE_TOKEN
+    assert_rejected "--allow-insecure-endpoint"
+    [[ "$output" != *PRIVATE_TOKEN* ]]
+    run_deploy --domain x.test --db-type postgres --no-ssl --dry-run --endpoint https://example.test/PRIVATE_TOKEN
+    [ "$status" = 0 ]; [[ "$output" != *PRIVATE_TOKEN* ]]
+    run_deploy --domain x.test --db-type postgres --no-ssl --dry-run --endpoint http://example.test/PRIVATE_TOKEN --allow-insecure-endpoint
+    [ "$status" = 0 ]; [[ "$output" != *PRIVATE_TOKEN* ]]
+    for url in file:///tmp/PRIVATE_TOKEN ftp://example.test/PRIVATE_TOKEN https://user:PRIVATE_TOKEN@example.test; do
+        run_deploy --domain x.test --db-type postgres --no-ssl --dry-run --endpoint "$url" --allow-insecure-endpoint
+        [ "$status" = 1 ]; [[ "$output" != *PRIVATE_TOKEN* ]]
+    done
+    run bash -c 'source "$1"; ensure_www_dir() { :; }; project_lock() { touch "$HARDEN_WORK/project-lock"; }
+        main --domain x.test --db-type postgres --no-ssl --endpoint http://example.test/PRIVATE_TOKEN' _ "$DEPLOY"
+    [ "$status" = 1 ]; [ ! -e "$HARDEN_WORK/project-lock" ]; [[ "$output" != *PRIVATE_TOKEN* ]]
+}
+
+@test "HTTP endpoint opt-in is supported by configuration files" {
+    local config
+    config=$(write_config 'DOMAIN=x.test\nDB_TYPE=postgres\nNO_SSL=true\nENDPOINT=http://example.test/PRIVATE_TOKEN\nALLOW_INSECURE_ENDPOINT=true\n')
+    run_deploy --config "$config" --dry-run
+    [ "$status" = 0 ]; [[ "$output" != *PRIVATE_TOKEN* ]]
+}
+
+@test "endpoint diagnostics never echo URL, body or client errors" {
+    for mode in success failed invalid-status; do
+        run bash -c '
+            source "$1"; ENDPOINT=https://example.test/?token=PRIVATE_TOKEN; MODE="$2"
+            SLUG=site; DOMAIN=x.test; DB_TYPE=postgres; DB_POSTGRES_NAME=db; DB_POSTGRES_USER=user
+            DB_POSTGRES_PASSWORD=PRIVATE_TOKEN; REDIS_PASSWORD=PRIVATE_TOKEN; AUTH_PASSWORD=PRIVATE_TOKEN
+            PORT_HTTP=8080; PORT_HTTPS=8443; PORT_PHP=9000; PORT_REDIS=6379; PORT_POSTGRES=5432
+            curl() {
+                cat > "$HARDEN_WORK/config"
+                echo "client error PRIVATE_TOKEN" >&2
+                case "$MODE" in success) printf 200 ;; failed) return 7 ;; invalid-status) printf PRIVATE_TOKEN ;; esac
+            }
+            send_project_data' _ "$DEPLOY" "$mode"
+        [ "$status" = 0 ]; [[ "$output" != *PRIVATE_TOKEN* ]]
+    done
 }
 @test "MySQL private option file is protected and cleaned on client failure" {
     export TEST_SECRET=$'quote"\\ $value'
@@ -306,6 +354,25 @@ SH
         wait_for_database' _ "$DEPLOY"
     [ "$status" = 1 ]; [ -f "$HARDEN_WORK/probe-cleaned" ]
     [[ "$output" == *"did not accept"* ]]
+}
+@test "failed project Nginx validation or reload aborts before accepting HTTP readiness" {
+    for failure in validation reload; do
+        run bash -c '
+            source "$1"; PROJECT_DIR="$HARDEN_WORK"; FAILURE="$2"
+            timeout() { shift; "$@"; }
+            docker() {
+                case "$*" in
+                    "compose exec -T nginx nginx -t") [[ "$FAILURE" != validation ]] ;;
+                    "compose exec -T nginx nginx -s reload") [[ "$FAILURE" != reload ]] ;;
+                    *) return 1 ;;
+                esac
+            }
+            curl() { touch "$HARDEN_WORK/http-accepted"; printf 200; }
+            check_project_http
+        ' _ "$DEPLOY" "$failure"
+        [ "$status" = 1 ]; [ ! -e "$HARDEN_WORK/http-accepted" ]
+        [[ "$output" == *"Cannot validate/reload project Nginx"* ]]
+    done
 }
 @test "restore stop failure restarts services and keeps maintenance with recovery instructions" {
     mkdir -p "$HARDEN_WORK/backups"; touch "$HARDEN_WORK/backups/valid.dump"

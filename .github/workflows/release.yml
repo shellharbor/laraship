@@ -6,6 +6,16 @@ name: Release
 on:
   push:
     tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to verify or complete (for example v1.2.0)
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -17,19 +27,35 @@ jobs:
     permissions:
       contents: write
       actions: read
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v7
+
+      - name: Preserve current publication policy and validate the requested tag
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Invalid release tag"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/laraship-release"
+          cp .github/scripts/check-release-ci.py "$RUNNER_TEMP/laraship-release/check-release-ci.py"
+          cp .github/scripts/publish-release.py "$RUNNER_TEMP/laraship-release/publish-release.py"
+
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
 
       - name: Require successful CI for the exact tagged commit
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 .github/scripts/check-release-ci.py
+        run: python3 "$RUNNER_TEMP/laraship-release/check-release-ci.py"
 
       - name: Check that the tag matches VERSION and CHANGELOG.md
         run: |
-          RELEASE="${GITHUB_REF_NAME#v}"
+          RELEASE="${RELEASE_TAG#v}"
           if [ "$(tr -d '[:space:]' < VERSION)" != "${RELEASE}" ]; then
-            echo "::error::tag ${GITHUB_REF_NAME} does not match VERSION ($(cat VERSION))"
+            echo "::error::tag ${RELEASE_TAG} does not match VERSION ($(cat VERSION))"
             exit 1
           fi
           bash .github/scripts/release-notes.sh "${RELEASE}" CHANGELOG.md > release-notes.md
@@ -40,17 +66,16 @@ jobs:
 
       - name: Build the archive and its checksum
         run: |
-          RELEASE="${GITHUB_REF_NAME#v}"
-          git archive --format=tar.gz --prefix="laraship-${RELEASE}/" -o "laraship-${RELEASE}.tar.gz" "${GITHUB_REF_NAME}"
+          RELEASE="${RELEASE_TAG#v}"
+          git archive --format=tar.gz --prefix="laraship-${RELEASE}/" -o "laraship-${RELEASE}.tar.gz" "refs/tags/${RELEASE_TAG}"
           sha256sum "laraship-${RELEASE}.tar.gz" > "laraship-${RELEASE}.tar.gz.sha256"
 
-      - name: Create the release
+      - name: Create or verify the release and complete missing assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          RELEASE="${GITHUB_REF_NAME#v}"
-          FLAGS=()
-          case "${RELEASE}" in *-*) FLAGS+=(--prerelease) ;; esac
-          gh release create "${GITHUB_REF_NAME}" \
-            "laraship-${RELEASE}.tar.gz" "laraship-${RELEASE}.tar.gz.sha256" \
-            --title "${RELEASE}" --notes-file release-notes.md --verify-tag "${FLAGS[@]}"
+          RELEASE="${RELEASE_TAG#v}"
+          python3 "$RUNNER_TEMP/laraship-release/publish-release.py" \
+            --tag "$RELEASE_TAG" --notes-file release-notes.md \
+            --asset "laraship-${RELEASE}.tar.gz" \
+            --asset "laraship-${RELEASE}.tar.gz.sha256"

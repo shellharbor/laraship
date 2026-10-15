@@ -52,6 +52,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  php-images:
+    name: PHP ${{ matrix.php }} runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ["82", "83"]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the pinned PHP runtime
+        run: docker build -t laraship-php:smoke -f laravel/.docker/php/php${{ matrix.php }}.Dockerfile laravel/.docker/php
+      - name: Check runtime, databases, Laravel and graceful shutdown
+        run: python3 tests/php-image-smoke.py --image laraship-php:smoke --variant ${{ matrix.php }}
+
   e2e:
     name: ${{ matrix.name }}
     runs-on: ubuntu-24.04

@@ -19,7 +19,7 @@ setup_file() {
     local args=(--slug "$SLUG" --domain "$DOMAIN" --db-type "$E2E_DB" --no-ssl)
     case "$OPTION_CASE" in
         generated)
-            args=(--domain example.test --db-type "$E2E_DB" --no-ssl --create-dhparam --create-backup --endpoint http://127.0.0.1:18090/deploy)
+            args=(--domain example.test --db-type "$E2E_DB" --no-ssl --create-dhparam --create-backup --endpoint http://127.0.0.1:18090/deploy --allow-insecure-endpoint)
             cat > "$BATS_FILE_TMPDIR/endpoint.py" <<'PY'
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path

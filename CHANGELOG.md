@@ -23,6 +23,49 @@ After every task with file changes, briefly record what changed and why: feature
 - 2026-10-04: translated all AI-KIT documents, adapters, rules, templates, and the bootstrap prompt into English; established English as the language for future kit updates.
 - 2026-10-04: extended the English language requirement to all authored project content and agent communication, including code, UI text, logs, Git messages, reviews, and reports, so future project work follows one language policy.
 
+## 1.2.0
+
+LaraShip 1.2.0 hardens deployment endpoints, reduces Compose PHP runtime images and makes GitHub release publication safe to retry.
+
+### Security
+
+- Deployment endpoints require HTTPS by default. HTTP requires the explicit `--allow-insecure-endpoint` flag or `ALLOW_INSECURE_ENDPOINT=true` in the deployment configuration.
+- Validate endpoint URLs before project creation and sending. Keep endpoint URLs and JSON payloads off the curl command line, discard response bodies and raw diagnostics from endpoint logs, disable redirects and user curl configuration, and retain TLS certificate verification.
+
+### PHP runtime images
+
+- Pin PHP 8.3.35 (default), PHP 8.2.34, Composer 2.10.3, PECL Redis 6.3.0 and APCu 5.1.28. Pin base/Composer/Debian image digests and verify PECL source checksums.
+- Separate compilation from the runtime image. Retain required PHP extensions and Composer/Git/SSH/ZIP tools while removing compilers, development headers, debugging tools and optional service packages.
+- Reduce the PHP 8.3 image to approximately 401 MB from 2.36 GB for the old recipe rebuilt with matching PHP/Composer/PECL versions: about 83% smaller, measured as uncompressed local Docker image size.
+- Preserve UID/GID 1000, add an FPM-only FastCGI liveness probe and allow active requests to drain with a 10-second FPM process-control timeout and 15-second Compose stop grace.
+
+### Fixes
+
+- Validate and reload project Nginx before HTTP readiness to refresh FastCGI resolution after PHP container recreation. Failures retain project data and stop before shared-proxy registration.
+- Make release publication retryable: verify matching existing assets, upload only missing files, and refuse conflicting content without overwriting published assets or release notes.
+- Serialize publication per tag and support manual recovery with an exact-tag checkout under the selected workflow's publication policy. Successful CI for the exact tagged commit remains required.
+
+### Tests and documentation
+
+- Add real PHP runtime checks for both variants: required extensions, GD/ZIP, PostgreSQL/MySQL PDO access, Laravel 13/12 installation and migrations, non-root/read-only execution and active-request draining. CI builds and checks both variants.
+- Add live HTTP/HTTPS privacy tests, release-publication regressions and a controlled PHP address-change regression. Capture PHP/Nginx diagnostics before lifecycle tests alter failed deployments.
+- Document PHP build upgrades and release recovery in the operation guides and ADR-0006/ADR-0007. Synchronize project context, continuity instructions and navigation with verified contracts and dated evidence.
+- Prepare VERSION, the installation example, workflow example and release notes for the user-confirmed v1.2.0 release.
+
+### Upgrade notes
+
+- Existing HTTP endpoint integrations must switch to HTTPS or explicitly opt in to HTTP. HTTPS recipients still receive deployment credentials and must be trusted; generated-credential console output is unchanged.
+- The unsupported PHP 8.1 template is removed. PHP 8.3 remains the default; PHP 8.2 is a manual alternative for compatible Laravel 12 applications.
+- Existing installations are not rewritten automatically. To adopt the PHP changes, copy the complete `laravel/.docker/php/` build directory, including its helper scripts and `.dockerignore`, adapt the FPM health/stop settings from `laravel/docker-compose.yml`, and deliberately rebuild the affected PHP roles. Applications using removed optional binaries or fonts need an explicit custom image.
+- Native Bash, the Docker CLI adapter and Kubernetes deployment contracts remain supported. This release does not publish a Docker Hub image or change the separate Kubernetes application image template. Database volumes are not upgraded automatically.
+
+### Validation
+
+- Release preparation on 2026-10-15 passed all 184 Bats and 54 Python unit checks without skips, ShellCheck, Bash syntax, actionlint and continuity-skill validation. CLI reports 1.2.0; release notes extract independently and historical 1.1.1/1.1.0 notes are unchanged.
+- On 2026-10-14, both PHP variants passed real runtime/database/Laravel/shutdown checks; all 184 Bats and 54 Python unit checks, ShellCheck, Bash syntax and actionlint passed.
+- The Nginx address-change fix previously passed isolated PostgreSQL and MySQL E2E scenarios. The original CI failure's exact cause remains unconfirmed.
+- Full installer/Kubernetes E2E, ARM builds, registry publication and remote CI were not repeated for this release preparation. Publication still requires successful CI for the final tagged commit.
+
 ## 1.1.1
 
 LaraShip 1.1.1 fixes Kubernetes CI fixture permissions and restores consistent release metadata.

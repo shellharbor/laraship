@@ -56,6 +56,8 @@ Modules run in the order they were enabled, with required modules first.
 
 Why services are added late: a container started before Laravel exists (a worker, Horizon) would restart in a loop until `artisan` appears, so the definitions are inserted only after the application is installed.
 
+After application/module setup and post-deploy commands, deployment validates and reloads project Nginx before the bounded HTTP readiness check. This refreshes the FastCGI address if Compose recreated PHP. Validation, reload or HTTP readiness failure retains project data and stops before shared-proxy registration.
+
 ### What a module can use
 
 Variables of the script: `SLUG`, `DOMAIN`, `PROJECT_DIR`, `SCRIPT_DIR`, `REDIS_PASSWORD`, `REPO_URL`, `DB_TYPE`, the `FILAMENT_*` options, and so on. Helpers: `info`, `warn`, `error` (exits), `success`, `random_string`, `set_env_var FILE KEY VALUE`, `module_enabled NAME`.

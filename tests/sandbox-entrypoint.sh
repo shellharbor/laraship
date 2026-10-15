@@ -42,7 +42,7 @@ reset_state() {
 run_unit() {
     echo "==> shellcheck"
     # SC2155 (declare and assign separately) is a style issue in remove.sh: known and excluded.
-    (cd "${WORK}" && shellcheck -S warning -e SC2155 deploy-laravel.sh activate.sh deactivate.sh remove.sh list-projects.sh update.sh backup.sh kubernetes.sh docker/*.sh lib/*.sh modules/*.sh .github/scripts/*.sh tests/native-db.sh tests/container-e2e.sh tests/kubernetes-e2e.sh)
+    (cd "${WORK}" && shellcheck -S warning -e SC2155 deploy-laravel.sh activate.sh deactivate.sh remove.sh list-projects.sh update.sh backup.sh kubernetes.sh docker/*.sh lib/*.sh modules/*.sh laravel/.docker/php/*.sh .github/scripts/*.sh tests/native-db.sh tests/container-e2e.sh tests/kubernetes-e2e.sh)
     echo "==> bats: static + validation + presets + safety"
     bats --print-output-on-failure "${WORK}/tests/static.bats" "${WORK}/tests/validation.bats" "${WORK}/tests/presets.bats" "${WORK}/tests/safety.bats" "${WORK}/tests/hardening.bats"
     python3 -m unittest discover -s "$WORK/tests" -p 'test_*.py' -v
