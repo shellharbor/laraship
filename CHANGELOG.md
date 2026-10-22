@@ -4,6 +4,10 @@ After every task with file changes, briefly record what changed and why: feature
 
 ## Unreleased
 
+### Documentation
+
+- Add a dynamic PyPI version badge to the README linking to the published laraship package, alongside the Docker Hub and project badges.
+
 ### AI-KIT
 
 - Refresh verified GitHub v1.2.2/Docker Hub publication state and continuity evidence after recovering repository Variables and registry credentials, without changing the released version or tag.

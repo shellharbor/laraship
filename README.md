@@ -7,6 +7,7 @@
 [![E2E](https://github.com/shellharbor/laraship/actions/workflows/e2e.yml/badge.svg)](https://github.com/shellharbor/laraship/actions/workflows/e2e.yml)
 [![Kubernetes](https://github.com/shellharbor/laraship/actions/workflows/kubernetes.yml/badge.svg)](https://github.com/shellharbor/laraship/actions/workflows/kubernetes.yml)
 [![Docker Hub](https://img.shields.io/badge/Docker%20Hub-shellharbor%2Flaraship-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/shellharbor/laraship)
+[![PyPI](https://img.shields.io/pypi/v/laraship?logo=pypi&logoColor=white)](https://pypi.org/project/laraship/)
 [![Website & command builder](https://img.shields.io/badge/Website-command%20builder-133F35)](https://shellharbor.github.io/laraship-docs/)
 [![CodeQL](https://github.com/shellharbor/laraship/actions/workflows/codeql.yml/badge.svg)](https://github.com/shellharbor/laraship/actions/workflows/codeql.yml)
 
