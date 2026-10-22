@@ -7,9 +7,17 @@
 [![E2E](https://github.com/shellharbor/laraship/actions/workflows/e2e.yml/badge.svg)](https://github.com/shellharbor/laraship/actions/workflows/e2e.yml)
 [![Kubernetes](https://github.com/shellharbor/laraship/actions/workflows/kubernetes.yml/badge.svg)](https://github.com/shellharbor/laraship/actions/workflows/kubernetes.yml)
 [![Docker Hub](https://img.shields.io/badge/Docker%20Hub-shellharbor%2Flaraship-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/shellharbor/laraship)
+[![Website & command builder](https://img.shields.io/badge/Website-command%20builder-133F35)](https://shellharbor.github.io/laraship-docs/)
 [![CodeQL](https://github.com/shellharbor/laraship/actions/workflows/codeql.yml/badge.svg)](https://github.com/shellharbor/laraship/actions/workflows/codeql.yml)
 
 `deploy-laravel.sh` deploys a Laravel site, optionally with the Filament admin panel, on an Ubuntu server. Every site runs in its own set of Docker containers, and traffic is accepted by a shared reverse proxy, `nginxproxy`. The script installs Docker, creates the project from the `laravel/` template, installs Laravel, sets up PostgreSQL or MySQL (in a container or native on the host) and obtains a Let's Encrypt SSL certificate.
+
+> [!TIP]
+> **[LaraShip website & command builder](https://shellharbor.github.io/laraship-docs/)**
+>
+> Choose your Laravel version, database, HTTPS settings and optional services in a guided interface, with setup guidance and answers to common questions. Generate a command, review it, then run it on your Ubuntu server after installing LaraShip.
+>
+> **[Build your deployment command →](https://shellharbor.github.io/laraship-docs/#configure)**
 
 The `laraship` folder is self-contained: it holds the deploy script, templates, management utilities, examples and a skill for Claude Code. Copy it to the server as a whole (for example, to `/opt/laraship/`) and run the scripts **on the server as root**. From your workstation (for example, Windows) connect to the server over SSH.
 
