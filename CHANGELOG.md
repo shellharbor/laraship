@@ -4,15 +4,8 @@ After every task with file changes, briefly record what changed and why: feature
 
 ## Unreleased
 
-### Documentation
-
-- Add a README website badge and introductory callout linking the LaraShip companion site, guided deployment command builder, setup guidance and FAQ, so users can configure a command before running it on their server.
-- Add a Docker Hub repository badge and README examples using the published shellharbor/laraship:1.2.2 CLI for inspection/dry run, Linux deployment/management and non-root Kubernetes rendering.
-- Explain how to diagnose a skipped Docker Hub job, distinguish GitHub Actions Variables from Secrets, recover from registry credential rejection, and retry publication for an existing release after correcting configuration.
-
 ### AI-KIT
 
-- Refresh local project context, continuity pointers and navigation with the verified companion website and documentation checks.
 - Refresh verified GitHub v1.2.2/Docker Hub publication state and continuity evidence after recovering repository Variables and registry credentials, without changing the released version or tag.
 - 2026-10-05: separated the language policy: all authored project files and artifacts remain English, while chat with the user uses Russian for questions, plans, progress, explanations, review summaries, and final reports. Project artifacts shown in chat retain English. Synchronized instructions, bootstrap, context, continuity skill, engineering/router rules, README, wiki, and decision log to preserve this distinction.
 - 2026-10-05: replaced the former Terra-based defaults with the user's Adaptive Model Router: Luna for bounded tasks, Sol 6.1 for engineering, and justified Astra escalation. Optimizes total cost to a correct result rather than the price of one call.
@@ -30,6 +23,42 @@ After every task with file changes, briefly record what changed and why: feature
 - Added a mandatory Kubernetes-ready standard for new Dockerfiles, containers, and microservices: portable images, configuration, security, shutdown, health checks, storage, and minimal manifests. Integrated the rule into instructions, context, the skill, and bootstrap so services are ready for Kubernetes from the start.
 - 2026-10-04: translated all AI-KIT documents, adapters, rules, templates, and the bootstrap prompt into English; established English as the language for future kit updates.
 - 2026-10-04: extended the English language requirement to all authored project content and agent communication, including code, UI text, logs, Git messages, reviews, and reports, so future project work follows one language policy.
+
+## 1.3.0
+
+LaraShip 1.3.0 adds a dependency-free Python CLI for pip/pipx installation and deployment completion hooks for local automation and API integrations. Native Bash, the Docker CLI and the separate Kubernetes backend remain supported.
+
+### Added
+
+- Add deployment completion callbacks: --on-complete and --completion-endpoint receive a final versioned JSON report on success, operational failure or handled cancellation, after archive creation and before preserving the original exit status.
+- Omit completion passwords by default; add explicit application-secret inclusion, private Bearer token files, HTTPS validation, bounded script/API delivery and privacy checks. Release the project lock before delivery; keep legacy endpoint/post-deploy behavior intact.
+- Exercise completion behavior against both source and the packaged Docker engine in container CI; retain explicit read-only hook/config inputs during Python Docker inspection without enabling server mounts or networking.
+- Add the dependency-free Python 3.10+ laraship CLI, installable through pip/pipx, with native release installation and Docker image execution using the existing deployment/lifecycle tools.
+- Verify HTTPS release downloads, SHA-256 and bounded archive extraction before creating a new native toolkit directory; refuse existing/symlink paths and retain failed copies with an incomplete marker.
+- Add pip/wheel/sdist/pipx checks across Python 3.10/3.12/3.14 and optional OIDC PyPI publication jobs in Release, enabled with PYPI_PUBLISH=true after configuring its Trusted Publisher.
+- Test prerelease builds separately: compare Python versions by PEP 440 identity while retaining the exact GitHub archive and Docker tag spelling in the installed adapter.
+
+### Documentation
+
+- Document completion lifecycle, configuration, permissions, credential limits and Docker/Python use, with a private report-storage example and ADR-0009.
+- Document Python installation, backend argument forwarding, privileged server operations, Docker mounts, updates and first-time PyPI setup; record the adapter and publication design in ADR-0008.
+- Rename the README's optional Docker shell helper to laraship_docker so it does not shadow the installed Python CLI; update the deployment skill with Python adapter boundaries.
+- Add a README website badge and introductory callout linking the LaraShip companion site, guided deployment command builder, setup guidance and FAQ, so users can configure a command before running it on their server.
+- Add a Docker Hub repository badge and README examples using the release CLI image for inspection/dry run, Linux deployment/management and non-root Kubernetes rendering; update current examples to shellharbor/laraship:1.3.0.
+- Explain how to diagnose a skipped Docker Hub job, distinguish GitHub Actions Variables from Secrets, recover from registry credential rejection, and retry publication for an existing release after correcting configuration.
+
+### Release and internal changes
+
+- Set VERSION and current native, Docker and Python installation examples to 1.3.0. Keep archive, image and Python package versions synchronized and retain exact-commit CI gates.
+- Add optional PyPI Trusted Publishing through the existing Release workflow, with checked distributions built separately from the OIDC publish job. Configure the pypi environment and PYPI_PUBLISH variable before publishing.
+- Synchronize local project context, continuity instructions and navigation with the new distribution, completion contracts and authorized release process.
+
+### Upgrade notes
+
+- Install the Python CLI with `pipx install laraship==1.3.0` or `python -m pip install laraship==1.3.0` in a virtual environment after PyPI publication. Python 3.10+ is required.
+- Native toolkit archives and the CLI image use release 1.3.0; the Docker image is `shellharbor/laraship:1.3.0` for linux/amd64. Select `--backend docker` explicitly when using the Python CLI.
+- Updating the adapter or toolkit does not update existing applications, database volumes or copied templates. Existing toolkit/image copies must be updated deliberately to use completion flags.
+- Completion hooks are opt-in and apply only to deployment. Passwords are omitted unless `--completion-include-secrets` is set; callback errors do not change the original deployment result. Existing `--post-deploy` and legacy `--endpoint` behavior is preserved.
 
 ## 1.2.2
 

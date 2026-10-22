@@ -53,3 +53,10 @@ CREATE_BACKUP=false
 # Optional deployment data receiver (the payload contains project credentials).
 # ENDPOINT=https://api.example.com/deployments
 # ALLOW_INSECURE_ENDPOINT=false  # Set true only to explicitly permit an HTTP receiver.
+
+# Optional final outcome delivery (success, operational failure or cancellation).
+# ON_COMPLETE=/opt/laraship-hooks/notify.sh
+# COMPLETION_ENDPOINT=https://api.example.com/deployments/completed
+# COMPLETION_TOKEN_FILE=/root/laraship-api.token
+# COMPLETION_INCLUDE_SECRETS=false
+# COMPLETION_TIMEOUT=30

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Validate endpoint URLs and encode private curl input from stdin."""
+from __future__ import annotations
+
 import argparse
 import json
 import sys

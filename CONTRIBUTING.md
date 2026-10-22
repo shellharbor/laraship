@@ -10,7 +10,7 @@ Thank you for helping. Bug reports, fixes, docs and new modules are welcome.
 
 ## Ground rules
 
-- Bash only, for Ubuntu with Docker. Keep the style of the surrounding code, and keep scripts LF-terminated (`.gitattributes` enforces it).
+- Bash deployment tools and dependency-free Python adapters, targeting Ubuntu with Docker. Keep the style of the surrounding code, and keep scripts LF-terminated (`.gitattributes` enforces it).
 - **English only** in code, comments, messages and docs.
 - Never source user-provided files: config, versions and meta files are parsed line by line.
 - Never print generated secrets in `--dry-run`, and keep secret files at mode 600.
@@ -28,6 +28,8 @@ bash tests/run-local.sh full           # all supported launch scenarios; saved p
 ```
 
 The other suites (`e2e-proxy`, `e2e-db-migration`, `e2e-repo`, `e2e-modules`, `install`) and full-matrix options are described in the README, "Tests and CI". Add or update tests for what you change: `tests/validation.bats` for argument handling, `tests/safety.bats` for failures that must preserve data and service state, `tests/e2e*.bats` for real deployments. CI runs Lint, Tests, E2E and CodeQL on every pull request. Breaking changes stay in `Unreleased` until a major release is prepared; the current P1 safety changes require that release.
+
+Python CLI changes must also pass the [package build, installer and backend checks](docs/PYTHON.md#build-and-verify-locally). Keep VERSION as the single version source and retain the explicit distribution file allowlist. The Tests workflow checks Python 3.10, 3.12 and 3.14 plus pip/pipx installation; PyPI publication belongs to the existing Release workflow and requires its configured Trusted Publisher.
 
 ## Contributing a module
 

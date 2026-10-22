@@ -57,7 +57,9 @@ runtime_guarded() {
     PREVIOUS_TRAPS=$(trap -p HUP INT TERM)
     "$@" &
     GUARDED_PID=$!
-    trap 'GUARDED_INTERRUPTED=true; runtime_cancel "$GUARDED_PID"' HUP INT TERM
+    trap 'GUARDED_INTERRUPTED=true; RUNTIME_LAST_SIGNAL=HUP; runtime_cancel "$GUARDED_PID"' HUP
+    trap 'GUARDED_INTERRUPTED=true; RUNTIME_LAST_SIGNAL=INT; runtime_cancel "$GUARDED_PID"' INT
+    trap 'GUARDED_INTERRUPTED=true; RUNTIME_LAST_SIGNAL=TERM; runtime_cancel "$GUARDED_PID"' TERM
     wait "$GUARDED_PID" || GUARDED_RESULT=$?
     if [[ "$GUARDED_INTERRUPTED" == true ]]; then
         wait "$GUARDED_PID" 2>/dev/null || true

@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[project]
+name = "laraship"
+dynamic = ["version"]
+description = "Install and run LaraShip through its native Bash toolkit or Docker CLI image."
+readme = "docs/PYTHON.md"
+requires-python = ">=3.10"
+dependencies = []
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Environment :: Console",
+  "Operating System :: POSIX :: Linux",
+  "Topic :: System :: Installation/Setup",
+]
+
+[project.scripts]
+laraship = "laraship.cli:main"
+
+[project.urls]
+Homepage = "https://shellharbor.github.io/laraship-docs/"
+Documentation = "https://github.com/shellharbor/laraship/blob/main/docs/PYTHON.md"
+Source = "https://github.com/shellharbor/laraship"
+Issues = "https://github.com/shellharbor/laraship/issues"
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "(?P<version>[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.]+)?)"
+
+[tool.hatch.build.targets.sdist]
+include = ["/src/laraship", "/VERSION", "/pyproject.toml", "/docs/PYTHON.md", "/.gitignore"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/laraship"]
+
+[tool.hatch.build.targets.wheel.force-include]
+VERSION = "laraship/_release.txt"

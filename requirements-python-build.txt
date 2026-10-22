@@ -1,0 +1,5 @@
+# Isolated development/release tools; the installed LaraShip package has no dependencies.
+build==1.6.1
+twine==7.0.0
+pipx==1.8.0; python_version < "3.11"
+pipx==1.18.4; python_version >= "3.11"

@@ -7,7 +7,12 @@ description: Use when you need to deploy a Laravel or Laravel+Filament site on a
 
 This skill belongs to the self-contained `laraship` folder (this file sits in its root). Full documentation: [README.md](README.md). Ready-made scenarios: [examples/](examples/README.md). The README also covers migrating from the old `deploy.sh` and updating servers deployed with an older version.
 `deploy-laravel.sh --version` prints the installed version (releases are on GitHub with a SHA-256 checksum; see the README, "Quick start").
+
+The optional Python 3.10+ CLI starts with release 1.3.0 and installs with pip/pipx from a reviewed checkout or the corresponding PyPI release. It installs exact toolkit archives with SHA-256 verification or runs the existing CLI Docker image. See [Python installation, backend boundaries and publication](docs/PYTHON.md). Native is the default; Docker requires `--backend docker`. Put adapter options before `--` and the existing Bash arguments after it. Use an absolute executable path with sudo. Package installation/upgrades do not deploy or update applications, and the Python adapter does not add direct Windows deployment or a Kubernetes backend.
+
 Take flags only from the "Arguments" table in the README (it has been checked against `parse_args`). Do not invent flags and do not use `--type` (it is kept only for compatibility).
+
+Deployment can use [completion scripts/API reports](docs/COMPLETION.md) through `--on-complete` and `--completion-endpoint`. They run after validated deployment succeeds, fails operationally or handles cancellation, preserving its exit status. Passwords need `--completion-include-secrets`; private Bearer files and trusted executable paths are required where configured. Help/dry run/invalid configuration do not notify. Existing `--post-deploy` and `--endpoint` behavior is unchanged. Docker hooks execute inside a toolkit/image that contains the feature, with explicit read-only inputs; the Python adapter forwards flags without duplicating the callback.
 
 ## What the script does
 

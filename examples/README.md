@@ -22,6 +22,8 @@ Ready-made `deploy-laravel.sh` launch scenarios. Each script consists of a heade
 
 Supporting files:
 
+The [completion hook example](hooks/completion.sh) stores a final deployment report privately. See [completion options](../docs/COMPLETION.md) for success/failure delivery, API authentication and explicitly including credentials.
+
 | File | What it is |
 |---|---|
 | [project.env.example](project.env.example) | Example of the `/var/www/<slug>/.env` the script generates: PostgreSQL + Basic Auth + Filament, fake values |

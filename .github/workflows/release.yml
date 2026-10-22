@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to verify or complete (for example v1.2.2)
+        description: Existing release tag to verify or complete (for example v1.3.0)
         required: true
         type: string
 
@@ -84,6 +84,66 @@ jobs:
             --tag "$RELEASE_TAG" --notes-file release-notes.md \
             --asset "laraship-${RELEASE}.tar.gz" \
             --asset "laraship-${RELEASE}.tar.gz.sha256"
+
+  python-package:
+    name: Build verified Python distributions
+    needs: release
+    if: vars.PYPI_PUBLISH == 'true'
+    outputs:
+      artifact-id: ${{ steps.distributions.outputs.artifact-id }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.release.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Build the checked release source
+        run: |
+          test -f pyproject.toml || { echo "::error::This tag predates Python packaging; publish a new version."; exit 1; }
+          python -m pip install -r requirements-python-build.txt
+          python -m build
+          python -m twine check --strict dist/*
+          python .github/scripts/check-python-dist.py dist "$(cat VERSION)"
+      - name: Check the installed release wheel
+        run: |
+          python -m venv "$RUNNER_TEMP/laraship-release"
+          "$RUNNER_TEMP/laraship-release/bin/python" -m pip install --no-deps dist/*.whl
+          "$RUNNER_TEMP/laraship-release/bin/laraship" --version
+          "$RUNNER_TEMP/laraship-release/bin/laraship" install --backend docker --dry-run
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        id: distributions
+        with:
+          name: python-distributions-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  pypi:
+    name: Publish Python distributions to PyPI
+    needs: python-package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/laraship/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.python-package.outputs.artifact-id }}
+          merge-multiple: true
+          path: dist/
+      - name: Publish through PyPI Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          skip-existing: true
 
   dockerhub:
     name: Publish the CLI image to Docker Hub

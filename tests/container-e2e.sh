@@ -12,6 +12,11 @@ DOMAIN="$SLUG.example.test"
 IMAGE=laraship:runner-test
 [[ ! -e "/var/www/$SLUG" && ! -e /var/www/cli-native-guard ]] || { echo 'Fixture path collision' >&2; exit 1; }
 docker build -q -t "$IMAGE" "$ROOT" >/dev/null
+echo '==> packaged completion callbacks, cancellation and private API delivery'
+docker run --rm --network none --read-only --tmpfs /tmp:rw,exec \
+    --entrypoint python3 --mount "type=bind,src=$ROOT/tests,dst=/tests,readonly" \
+    -e LARASHIP_COMPLETION_TEST_ROOT=/opt/laraship -e PYTHONDONTWRITEBYTECODE=1 \
+    "$IMAGE" -m unittest discover -s /tests -p test_completion.py -v
 install -d -m 755 /var/www
 install -d -m 700 /run/lock/laraship /var/backups/laraship
 cli() {

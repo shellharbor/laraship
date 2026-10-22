@@ -35,7 +35,12 @@ set -euo pipefail
 #   --laravel-version X.Y        Laravel version (minimum LARAVEL_MIN_VERSION in versions.env, 12.0; default 13.0)
 #   --create-backup              Create a zip archive of the project in /tmp after deployment
 #   --endpoint URL               Send project data (JSON, PUT) to an HTTPS URL
-#   --allow-insecure-endpoint    Explicitly permit HTTP for --endpoint (unencrypted credentials)
+#   --allow-insecure-endpoint    Explicitly permit HTTP for either endpoint feature
+#   --on-complete PATH           Executable script receiving completion JSON on stdin (success or failure)
+#   --completion-endpoint URL    POST completion JSON to an HTTPS API (success or failure)
+#   --completion-include-secrets Include known application passwords in completion JSON (default: omitted)
+#   --completion-token-file PATH Private file containing an API Bearer token (never pass the token as an argument)
+#   --completion-timeout SECONDS Timeout for each completion target, 1-300 seconds (default: 30)
 #
 # Filament:
 #   --install-filament           Install filament/filament and the /admin panel
@@ -90,6 +95,8 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 source "$SCRIPT_DIR/lib/runtime.sh"
 # shellcheck source=lib/proxy.sh
 source "$SCRIPT_DIR/lib/proxy.sh"
+# shellcheck source=lib/completion.sh
+source "$SCRIPT_DIR/lib/completion.sh"
 SCRIPT_VERSION="unknown"
 if [[ -f "${SCRIPT_DIR}/VERSION" ]]; then
     SCRIPT_VERSION="$(tr -d '[:space:]' < "${SCRIPT_DIR}/VERSION")"
@@ -198,8 +205,8 @@ load_versions() {
 # upper case with '_' for '-' (DB_TYPE = --db-type). Boolean flags take true/yes/1/on to enable
 # and false/no/0/off (or an empty value) to leave the flag off. The file is parsed line by line and
 # never sourced. Flags given on the command line override the file.
-CONFIG_VALUE_FLAGS=(with backup-keep slug domain laravel-version filament-email filament-name filament-password port-http port-https port-php port-redis port-postgres port-mysql redis-password db-type db-mysql-name db-mysql-user db-mysql-password db-mysql-root-password db-postgres-name db-postgres-user db-postgres-password db-root-password auth-user auth-password ssl-email endpoint php-upload-max repo branch deploy-key post-deploy)
-CONFIG_BOOL_FLAGS=(install-filament create-backup db-native create-dhparam enable-basic-auth no-ssl obtain-ssl bind-local use-redis queue-worker allow-insecure-endpoint)
+CONFIG_VALUE_FLAGS=(with backup-keep slug domain laravel-version filament-email filament-name filament-password port-http port-https port-php port-redis port-postgres port-mysql redis-password db-type db-mysql-name db-mysql-user db-mysql-password db-mysql-root-password db-postgres-name db-postgres-user db-postgres-password db-root-password auth-user auth-password ssl-email endpoint php-upload-max repo branch deploy-key post-deploy on-complete completion-endpoint completion-token-file completion-timeout)
+CONFIG_BOOL_FLAGS=(install-filament create-backup db-native create-dhparam enable-basic-auth no-ssl obtain-ssl bind-local use-redis queue-worker allow-insecure-endpoint completion-include-secrets)
 CONFIG_ARGS=()
 DRY_RUN=false
 USED_PRESETS=()
@@ -328,6 +335,9 @@ print_dry_run() {
     printf '  %-13s %s\n' "DB dumps:" "$DUMPS"
     printf '  %-13s %s\n' "Endpoint:" "$ENDP"
     printf '  %-13s %s\n' "Post-deploy:" "$POST"
+    if [[ -n "$ON_COMPLETE$COMPLETION_ENDPOINT" ]]; then
+        printf '  %-13s %s\n' "Completion:" "configured (not executed during dry run)"
+    fi
     echo ""
     echo "Nothing was changed. Run the same command without --dry-run, as root, to deploy."
 }
@@ -719,6 +729,13 @@ REPO_BRANCH=""
 DEPLOY_KEY=""
 POST_DEPLOY=""
 POST_DEPLOY_FAILED=false
+ON_COMPLETE=""
+COMPLETION_ENDPOINT=""
+COMPLETION_TOKEN_FILE=""
+COMPLETION_INCLUDE_SECRETS=false
+COMPLETION_TIMEOUT=30
+COMPLETION_HTTP_READY=false
+COMPLETION_PROXY_READY=false
 LARAVEL_VERSION_SET=false
 BIND_LOCAL=true
 PHP_UPLOAD_MAX=""
@@ -769,6 +786,11 @@ parse_args() {
             --branch)                 REPO_BRANCH="$2";            shift 2 ;;
             --deploy-key)             DEPLOY_KEY="$2";             shift 2 ;;
             --post-deploy)            POST_DEPLOY="$2";            shift 2 ;;
+            --on-complete)            ON_COMPLETE="$2";           shift 2 ;;
+            --completion-endpoint)    COMPLETION_ENDPOINT="$2";   shift 2 ;;
+            --completion-token-file)  COMPLETION_TOKEN_FILE="$2"; shift 2 ;;
+            --completion-timeout)     COMPLETION_TIMEOUT="$2";    shift 2 ;;
+            --completion-include-secrets) COMPLETION_INCLUDE_SECRETS=true; shift 1 ;;
             --bind-local)             BIND_LOCAL=true;             shift 1 ;;
             --use-redis)              enable_module redis;         shift 1 ;;
             --queue-worker)           enable_module queue;         shift 1 ;;
@@ -780,6 +802,7 @@ parse_args() {
     done
 
     validate_endpoint
+    validate_completion
     [[ -z "$DOMAIN" ]]  && error "--domain is not specified"
     [[ -z "$DB_TYPE" ]] && error "--db-type is not specified"
 
@@ -2275,6 +2298,7 @@ main() {
     LARAVEL_VERSION="$DEFAULT_LARAVEL_VERSION"
     info "Parsing arguments..."
     parse_args ${CONFIG_ARGS[@]+"${CONFIG_ARGS[@]}"} ${CLI_ARGS[@]+"${CLI_ARGS[@]}"}
+    completion_arm
     if [[ "${LARASHIP_CONTAINER:-0}" == 1 && "$DB_NATIVE" == true && "$DRY_RUN" != true ]]; then
         error "Native database provisioning requires the native Bash runner on the server; use a container database with the Docker runner"
     fi
@@ -2289,30 +2313,50 @@ main() {
     validate_port_values
     check_port_availability
     info "Arguments processed successfully"
+    COMPLETION_STAGE=docker_install
     install_docker
+    COMPLETION_STAGE=project_create
     create_project
+    COMPLETION_STAGE=dhparam
     create_dhparam
+    COMPLETION_STAGE=nginx_configure
     comment_ssl_blocks
+    COMPLETION_STAGE=database_create
     create_native_database
+    COMPLETION_STAGE=containers_start
     build_and_start_project
+    COMPLETION_STAGE=application_install
     if [[ -n "$REPO_URL" ]]; then
         install_from_repo
     else
         install_laravel
     fi
+    COMPLETION_STAGE=application_configure
     configure_laravel_env
     run_module_hook env "${PROJECT_DIR}/public_html/.env"
+    COMPLETION_STAGE=modules_install
     install_modules
+    COMPLETION_STAGE=post_deploy
     run_post_deploy
+    COMPLETION_STAGE=http_readiness
     check_project_http
+    COMPLETION_HTTP_READY=true
+    COMPLETION_STAGE=proxy_register
     restart_nginxproxy
+    COMPLETION_PROXY_READY=true
+    COMPLETION_STAGE=ssl
     obtain_ssl_certificate
+    COMPLETION_STAGE=legacy_endpoint
     send_project_data
+    COMPLETION_STAGE=archive
     create_project_backup
+    COMPLETION_STAGE=summary
     print_summary
     if [[ "$POST_DEPLOY_FAILED" == true ]]; then
+        COMPLETION_STAGE=post_deploy
         error "The deployment finished, but the --post-deploy commands failed (see above)"
     fi
+    COMPLETION_STAGE=complete
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

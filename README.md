@@ -21,7 +21,9 @@
 
 The `laraship` folder is self-contained: it holds the deploy script, templates, management utilities, examples and a skill for Claude Code. Copy it to the server as a whole (for example, to `/opt/laraship/`) and run the scripts **on the server as root**. From your workstation (for example, Windows) connect to the server over SSH.
 
-LaraShip also has a published **CLI Docker image**, [`shellharbor/laraship:1.2.2`](https://hub.docker.com/r/shellharbor/laraship), with the same Bash tools and their dependencies, plus a separate **Kubernetes backend** for existing applications built into immutable images. Native Bash remains supported. See [published-image examples](#run-from-docker-hub), [Docker runner](docs/CONTAINERS.md) and [Kubernetes deployment, image contract and scope](docs/KUBERNETES.md). Existing Compose projects and database volumes are not converted automatically.
+LaraShip also has a **CLI Docker image**, [`shellharbor/laraship:1.3.0`](https://hub.docker.com/r/shellharbor/laraship), with the same Bash tools and their dependencies, plus a separate **Kubernetes backend** for existing applications built into immutable images. Native Bash remains supported. See [published-image examples](#run-from-docker-hub), [Docker runner](docs/CONTAINERS.md) and [Kubernetes deployment, image contract and scope](docs/KUBERNETES.md). Existing Compose projects and database volumes are not converted automatically.
+
+The **[Python CLI](docs/PYTHON.md)** adds installation through pip or pipx and a `laraship` command for the native and Docker backends. It downloads verified toolkit releases or runs the published CLI image. Release 1.3.0 adds PyPI packaging; a reviewed checkout can also be installed with `pipx install .`.
 
 ---
 
@@ -31,6 +33,7 @@ LaraShip also has a published **CLI Docker image**, [`shellharbor/laraship:1.2.2
 - [Architecture](#architecture)
 - [Requirements](#requirements)
 - [Quick start](#quick-start)
+- [Install with pip or pipx](#install-with-pip-or-pipx)
 - [Run from Docker Hub](#run-from-docker-hub)
 - [Kubernetes backend](docs/KUBERNETES.md)
 - [Arguments](#arguments)
@@ -48,6 +51,7 @@ LaraShip also has a published **CLI Docker image**, [`shellharbor/laraship:1.2.2
 - [Project management](#project-management)
 - [Re-running the script](#re-running-the-script)
 - [Sending data to an endpoint](#sending-data-to-an-endpoint)
+- [Deployment completion hooks](#deployment-completion-hooks)
 - [Security](#security)
 - [Laravel versions and conditions](#laravel-versions-and-conditions)
 - [Troubleshooting / FAQ](#troubleshooting--faq)
@@ -173,6 +177,19 @@ The `artisan`, `composer`, `npm` and `permissions` utilities have no profile. Be
 
 ---
 
+## Install with pip or pipx
+
+Python 3.10+ is required. Once v1.3.0 is published on PyPI, install its isolated CLI with pipx:
+
+```bash
+pipx install laraship==1.3.0
+laraship --help
+laraship install --backend native --version 1.3.0 --dry-run
+laraship install --backend docker --version 1.3.0 --dry-run
+```
+
+Alternatively, use `python -m pip install laraship==1.3.0` inside a virtual environment. Before publication, or to review a source checkout, use `pipx install .`. The Python package has no runtime dependencies and only installs its CLI; installation/deployment are explicit commands. Server operations retain their Ubuntu/Linux, root and Docker requirements. See the [Python guide](docs/PYTHON.md) for actual installation, argument forwarding, Docker mounts, updates and PyPI Trusted Publishing setup.
+
 ## Quick start
 
 ### 1. Copy the folder to the server
@@ -195,7 +212,7 @@ You can also put the folder into a separate git repository and run `git clone` o
 **Or install a release.** Every release is published on GitHub as a tarball with a SHA-256 checksum:
 
 ```bash
-VERSION=1.2.2
+VERSION=1.3.0
 curl -fsSLO https://github.com/shellharbor/laraship/releases/download/v${VERSION}/laraship-${VERSION}.tar.gz
 curl -fsSLO https://github.com/shellharbor/laraship/releases/download/v${VERSION}/laraship-${VERSION}.tar.gz.sha256
 sha256sum -c laraship-${VERSION}.tar.gz.sha256
@@ -237,15 +254,15 @@ bash /opt/laraship/deploy-laravel.sh --help
 
 ## Run from Docker Hub
 
-The published image `shellharbor/laraship:1.2.2` targets `linux/amd64`. Docker Engine must already be installed and running. The image packages the toolkit and its dependencies, so downloading the source folder is optional for this runner.
+The release image `shellharbor/laraship:1.3.0` targets `linux/amd64`. Docker Engine must already be installed and running. The image packages the toolkit and its dependencies, so downloading the source folder is optional for this runner.
 
 ### Pull, inspect and preview
 
 ```bash
-docker pull shellharbor/laraship:1.2.2
-docker run --rm shellharbor/laraship:1.2.2 --version
-docker run --rm shellharbor/laraship:1.2.2 --help
-docker run --rm shellharbor/laraship:1.2.2 deploy --dry-run \
+docker pull shellharbor/laraship:1.3.0
+docker run --rm shellharbor/laraship:1.3.0 --version
+docker run --rm shellharbor/laraship:1.3.0 --help
+docker run --rm shellharbor/laraship:1.3.0 deploy --dry-run \
   --slug shop --domain shop.example.com --db-type postgres --no-ssl
 ```
 
@@ -259,33 +276,33 @@ Create the host directories, then define this helper in the server's Bash shell:
 sudo install -d -m 755 /var/www
 sudo install -d -m 700 /run/lock/laraship /var/backups/laraship
 
-laraship() {
+laraship_docker() {
   sudo docker run --rm -it --network host \
     --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
     --mount type=bind,src=/var/www,dst=/var/www \
     --mount type=bind,src=/run/lock/laraship,dst=/run/lock/laraship \
     --mount type=bind,src=/var/backups/laraship,dst=/var/backups/laraship \
-    shellharbor/laraship:1.2.2 "$@"
+    shellharbor/laraship:1.3.0 "$@"
 }
 ```
 
-The helper uses host networking and identical bind paths so application containers, project files, locks and archives share the Linux server's state. Keep Docker's generated hostname. Docker socket access grants administrative control of the server; use a trusted image.
+The helper uses host networking and identical bind paths so application containers, project files, locks and archives share the Linux server's state. Its name avoids shadowing the optional Python CLI's `laraship` command. Keep Docker's generated hostname. Docker socket access grants administrative control of the server; use a trusted image.
 
 Replace the domain and email below with your own, and point the domain's DNS at the server before requesting TLS. Deploy Laravel with PostgreSQL and the database backup module, then create a private project ZIP:
 
 ```bash
-laraship deploy --slug shop --domain shop.example.com --db-type postgres \
+laraship_docker deploy --slug shop --domain shop.example.com --db-type postgres \
   --ssl-email admin@example.com --with backup --create-backup
 ```
 
 For MySQL, use `--db-type mysql`. The same helper and mounts support project management:
 
 ```bash
-laraship list
-laraship backup --slug shop now
-laraship backup --slug shop list
-laraship deactivate --slug shop
-laraship activate --slug shop
+laraship_docker list
+laraship_docker backup --slug shop now
+laraship_docker backup --slug shop list
+laraship_docker deactivate --slug shop
+laraship_docker activate --slug shop
 ```
 
 Projects remain under `/var/www/shop`; `--create-backup` ZIP archives are written to `/var/backups/laraship`. Database dumps from the backup module stay under the project's `backups/` directory. Generated credentials are saved in the project. Full configuration, Git update and recovery details are in the [Docker runner guide](docs/CONTAINERS.md).
@@ -296,7 +313,7 @@ The same image can render manifests as your current user with a read-only root f
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" --read-only --tmpfs /tmp \
-  shellharbor/laraship:1.2.2 kubernetes render \
+  shellharbor/laraship:1.3.0 kubernetes render \
   --name shop --namespace shop --image registry.example.com/shop:1.0.0 \
   --configmap shop-config-v1 --secret shop-secret-v1 --revision v1 \
   > shop.k8s.yaml
@@ -326,6 +343,11 @@ The table follows `parse_args` and the `--help` header of the script. An unknown
 | `--laravel-version` | `X.Y` | `LARAVEL_VERSION` from `versions.env` (13.0) | Laravel version, installed as `laravel/laravel:^X.Y`. Minimum `12.0` (`LARAVEL_MIN_VERSION` in `versions.env`): Laravel 10.x and 11.x are no longer supported and are refused up front |
 | `--create-backup` | — | off | After deployment, create `/tmp/<slug>_<YYYYmmdd_HHMMSS>.zip` from the project folder |
 | `--endpoint` | `URL` | — | Send the project data as JSON with PUT to an absolute HTTPS URL (see [below](#sending-data-to-an-endpoint)) |
+| `--on-complete` | `PATH` | — | Execute a trusted script with final completion JSON on stdin, on success or failure |
+| `--completion-endpoint` | `URL` | — | POST final completion JSON to an HTTPS API |
+| `--completion-include-secrets` | — | off | Include known application passwords in the completion report |
+| `--completion-token-file` | `PATH` | — | Private file containing the completion API Bearer token |
+| `--completion-timeout` | `SECONDS` | 30 | Per-target timeout, from 1 to 300 seconds |
 | `--allow-insecure-endpoint` | — | off | Explicitly permit an HTTP endpoint; its project credentials travel without transport encryption. TLS verification stays enabled for HTTPS |
 | `--type` | `laravel` | — | Only for compatibility with the old `deploy.sh`. Any other value is an error. Do not use it in new commands |
 
@@ -1194,6 +1216,12 @@ If you choose to remove a failed first installation, `remove.sh` handles a share
 
 ---
 
+## Deployment completion hooks
+
+Use `--on-complete /absolute/notify.sh`, `--completion-endpoint https://api.example.com/deployments/completed`, or both to receive the final result on success, operational failure or handled cancellation. JSON includes the original exit status, last stage, project/database settings, readiness and archive path. Passwords are omitted unless `--completion-include-secrets` is explicitly enabled.
+
+Completion runs after the final deployment step; notification failure does not change the exit status. It is armed after argument validation; help, dry run and invalid configuration do not execute hooks. See the [completion guide](docs/COMPLETION.md) for configuration, private Bearer tokens, script permissions, Docker/Python examples and lifecycle limits. Existing `--post-deploy` commands and the `--endpoint` PUT contract retain their behavior.
+
 ## Sending data to an endpoint
 
 With `--endpoint URL`, after the SSL attempt (and before the backup) the script sends a JSON PUT request to the configured recipient. HTTPS is required by default; malformed URLs, other protocols and embedded URL credentials are refused during argument validation, before project creation. Redirects are never followed.
@@ -1627,21 +1655,21 @@ The workflow files are in `.github/workflows/`:
 | `kubernetes.yml` | build the CLI/application images, CLI/native lifecycle with PostgreSQL/MySQL, API schema validation and real Laravel 12/13 migrations, replicas, HTTP and worker in disposable kind | push, PR, manually |
 | `e2e.yml` | deployment, two-site proxy and legacy-to-official DB migration suites on a clean runner, matrix: PostgreSQL + Filament (Laravel 12, default options) and MySQL (default Laravel version, with the new options and the settings given through `--config`) | push and PR when scripts, helpers, templates, versions, changelog or tests change; on Mondays; manually |
 | `codeql.yml` | CodeQL analysis of the workflow files themselves (language `actions`) | push, PR, weekly |
-| `release.yml` | verify exact-commit CI, publish GitHub release assets and optionally build/test/push the CLI image to Docker Hub | version tag, manually |
+| `release.yml` | verify exact-commit CI, publish GitHub assets, optionally publish the CLI image to Docker Hub and the verified Python distributions to PyPI | version tag, manually |
 
 The E2E workflow has two more jobs, `e2e-repo` (for `--repo` and `update.sh`) and `e2e-modules` (for `--with filament,horizon`). The Install matrix workflow runs every case of `install-matrix.bats` once a week and on demand (Composer, Packagist and Laravel change over time), one job per case. CodeQL does not support Bash, so it checks only GitHub Actions, while the scripts themselves are covered by ShellCheck and the tests. Requesting a Let's Encrypt certificate (`E2E_SSL=1`) runs in CI only on schedule and manually, to avoid hitting rate limits on every PR. Dependabot proposes version updates for the actions (`.github/dependabot.yml`).
 
 The badges at the top of the file point to the `shellharbor/laraship` repository; if you rename or fork it, update the paths in all badge links.
 
-Release publication requires completed successful `lint.yml`, `tests.yml`, `e2e.yml`, `codeql.yml` and `kubernetes.yml` main/master push runs for the exact tagged commit. Missing, failed or running checks block publication; an earlier green commit is insufficient. The next prepared release is **1.2.2**; see its [changes and publication notes](CHANGELOG.md#122). Unassigned changes remain under Unreleased.
+Release publication requires completed successful `lint.yml`, `tests.yml`, `e2e.yml`, `codeql.yml` and `kubernetes.yml` main/master push runs for the exact tagged commit. Missing, failed or running checks block publication; an earlier green commit is insufficient. The next prepared release is **1.3.0**; see its [changes and publication notes](CHANGELOG.md#130). Unassigned changes remain under Unreleased.
 
 Prepare releases in this order:
 
 1. Set `VERSION` to the intended version and add the matching numeric section in `CHANGELOG.md`. Commit these files together with the release changes.
 2. Push that commit to main/master and wait for all five required workflows to finish successfully for that exact SHA.
-3. Create and push the matching tag, such as `v1.2.2`, pointing to that verified commit. The native CLI version, archive and Docker Hub image derive from its committed `VERSION` file.
+3. Create and push the matching tag, such as `v1.3.0`, pointing to that verified commit. The native CLI version, archive and Docker Hub image derive from its committed `VERSION` file.
 
-The failed `v1.2.1` attempt used `VERSION=1.2.0`. The `v1.2.2` tag must point to the new release-preparation commit; rerunning the old tag cannot pick up later file changes.
+Release 1.3.0 introduces Python packaging and deployment completion hooks. Older tags do not contain these features; never move an existing tag to include later changes.
 
 Publication can be retried safely: matching existing assets are verified, missing assets are uploaded, and published files and release notes are preserved. Different or incomplete assets, draft releases and moved tags are refused. Legacy assets without digest metadata are downloaded for comparison. Jobs for the same tag are serialized. After the updated workflow reaches the default branch, use **Actions → Release → Run workflow** with an existing tag such as `v1.1.1` to complete a release created manually; the selected workflow supplies the current publisher/CI policy while the checkout and archive use the requested tag. The same exact-commit CI and version checks apply. See [ADR-0006](docs/adr/0006-idempotent-release-publication.md).
 
