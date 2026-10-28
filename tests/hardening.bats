@@ -3,6 +3,73 @@
 load helpers
 setup() { export HARDEN_WORK="$BATS_TEST_TMPDIR/hardening"; mkdir -p "$HARDEN_WORK"; }
 
+@test "Compose security checks use actual PHP, bounded nonterminal input and propagate refusal" {
+    mkdir -p "$HARDEN_WORK/bin" "$HARDEN_WORK/project"
+    cat > "$HARDEN_WORK/bin/docker" <<'DOCKER'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$HARDEN_WORK/security-args"
+[[ "$(readlink /proc/$$/fd/0)" = /dev/null ]] || exit 91
+exit "${TEST_SECURITY_EXIT:-0}"
+DOCKER
+    chmod +x "$HARDEN_WORK/bin/docker"
+    local result
+    for result in 0 1; do
+        run env TEST_SECURITY_EXIT="$result" PATH="$HARDEN_WORK/bin:$PATH" bash -c '
+            SCRIPT_DIR="$1"; source "$SCRIPT_DIR/lib/security.sh"
+            check_project_security "$HARDEN_WORK/project" /var/www/html/composer.lock
+        ' _ "$REPO_ROOT"
+        [ "$status" = "$result" ]
+        grep -qx -- '--no-deps' "$HARDEN_WORK/security-args"
+        grep -qx -- '--entrypoint' "$HARDEN_WORK/security-args"
+        grep -qx -- '-T' "$HARDEN_WORK/security-args"
+        grep -qx /var/www/html/composer.lock "$HARDEN_WORK/security-args"
+        grep -q 'laraship_check_php' "$HARDEN_WORK/security-args"
+    done
+}
+
+@test "unlocked repositories resolve without scripts or installation and pass policy before install" {
+    local upstream="$HARDEN_WORK/upstream" refusal project
+    mkdir -p "$upstream"
+    git -C "$upstream" init -q --initial-branch=main
+    printf '{}' > "$upstream/composer.json"
+    printf '<?php\n' > "$upstream/artisan"
+    git -C "$upstream" add .
+    git -C "$upstream" -c user.name=fixture -c user.email=fixture@example.test commit -qm 'Synthetic application'
+    for refusal in 1 0; do
+        project="$HARDEN_WORK/project-$refusal"
+        mkdir -p "$project/public_html"
+        run env TEST_GUARD_REFUSAL="$refusal" TEST_PROJECT="$project" TEST_REPOSITORY="$upstream" bash -c '
+            source "$1/deploy-laravel.sh"
+            PROJECT_DIR="$TEST_PROJECT"; REPO_URL="file://$TEST_REPOSITORY"; REPO_BRANCH=main
+            docker() {
+                printf "%s\n" "$*" >> "$TEST_PROJECT/steps"
+                if [[ "$*" == *"composer update"* ]]; then
+                    printf "{}" > "$TEST_PROJECT/public_html/composer.lock"
+                elif [[ "$*" == *"composer install"* ]]; then
+                    touch "$TEST_PROJECT/installed"
+                    return 23
+                fi
+            }
+            check_project_security() {
+                test -f "$TEST_PROJECT/public_html/composer.lock" || return 91
+                printf "policy\n" >> "$TEST_PROJECT/steps"
+                return "$TEST_GUARD_REFUSAL"
+            }
+            install_from_repo
+        ' _ "$REPO_ROOT"
+        [ "$status" = 1 ]
+        grep -q 'composer update --no-install --no-dev --no-scripts --no-plugins' "$project/steps"
+        grep -qx policy "$project/steps"
+        if [ "$refusal" = 1 ]; then
+            [ ! -e "$project/installed" ]
+            [[ "$output" == *"Repository dependencies violate the runtime security policy"* ]]
+        else
+            [ -e "$project/installed" ]
+            [[ "$output" == *"composer install failed"* ]]
+        fi
+    done
+}
+
 @test "native PostgreSQL backup selects the connected server major and keeps secrets out of arguments" {
     export TEST_SECRET=$'native quote\' and " \\ ${literal}'
     run bash -c '

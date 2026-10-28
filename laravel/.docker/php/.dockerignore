@@ -3,3 +3,4 @@
 !php83.Dockerfile
 !build-extensions.sh
 !fpm-healthcheck.sh
+!security-policy.php

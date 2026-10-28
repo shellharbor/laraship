@@ -3,6 +3,8 @@
 - Date: 2026-10-14
 - Status: accepted, targeted for v1.2.0
 
+The original PHP patch pins below are historical. [ADR-0010](0010-runtime-security-floor.md) supersedes them with mandatory patched versions and actual runtime/dependency checks.
+
 ## Context
 
 Compose PHP templates used floating PHP/Composer images and unversioned PECL installs. Compilation tools, development headers, editors, debuggers and optional mail/media/antivirus packages remained in the application image. Cleanup in a later layer could not remove bytes from earlier layers. The same image serves FPM and separate Composer/Artisan/cron/worker commands.

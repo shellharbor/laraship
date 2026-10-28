@@ -98,6 +98,7 @@ class Smoke:
         self.network = self.docker('network', 'create', f'laraship-php-{self.owner}').stdout.strip()
         self.volume = f'laraship-php-{self.owner}'
         self.docker('volume', 'create', '--label', f'io.laraship.php-smoke={self.owner}', self.volume)
+        print(self.run(['php'], input_text=(ROOT / 'tests/security-policy.php').read_text(encoding='utf-8')).strip(), flush=True)
         core = self.run(['php', '-r', '''
             foreach (['mbstring','zip','exif','pcntl','ctype','xml','intl','PDO','mysqli',
                       'pdo_mysql','pgsql','pdo_pgsql','pdo_sqlite','gd','bcmath','sockets','redis','apcu'] as $ext) {

@@ -3,7 +3,7 @@
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
 DEPLOY="${REPO_ROOT}/deploy-laravel.sh"
-SCRIPTS=(lib/runtime.sh lib/proxy.sh deploy-laravel.sh activate.sh deactivate.sh remove.sh list-projects.sh update.sh backup.sh kubernetes.sh docker/entrypoint.sh .github/scripts/release-notes.sh tests/native-db.sh)
+SCRIPTS=(lib/runtime.sh lib/proxy.sh lib/security.sh deploy-laravel.sh activate.sh deactivate.sh remove.sh list-projects.sh update.sh backup.sh kubernetes.sh docker/entrypoint.sh .github/scripts/release-notes.sh tests/native-db.sh)
 
 # KEY from an env-style file (first match).
 env_val() { grep -E "^$2=" "$1" | head -n1 | cut -d= -f2-; }

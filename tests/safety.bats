@@ -602,6 +602,10 @@ run_update() {
         PROJECT_DIR="$SAFETY_WORK/project"; APP_DIR="$PROJECT_DIR/public_html"
         REPO_BRANCH=main; REPO_URL="$SAFETY_WORK/upstream"
         NO_MIGRATE="${TEST_NO_MIGRATE:-false}"; HARD_RESET="${TEST_HARD_RESET:-false}"
+        check_project_security() {
+            [[ -z "${2:-}" || "${TEST_LOCK_FAIL:-0}" != 1 ]] || return 1
+            return "${TEST_SECURITY_FAIL:-0}"
+        }
         art() {
             case "$1" in
                 down)
@@ -644,6 +648,31 @@ run_update() {
     [[ "${output}" == *"stopped before changing application code"* ]]
     [ "$(cat "${SAFETY_WORK}/project/public_html/code")" = old ]
     [ "$(cat "${SAFETY_WORK}/steps")" = down-old ]
+}
+
+@test "an unsafe PHP runtime stops update before maintenance or code changes" {
+    make_update_repo
+    export TEST_SECURITY_FAIL=1
+    run_update
+    [ "$status" = 1 ]
+    [[ "$output" == *"PHP security policy failed"* ]]
+    [ "$(cat "$SAFETY_WORK/project/public_html/code")" = old ]
+    [ ! -e "$SAFETY_WORK/maintenance" ]
+    [ ! -e "$SAFETY_WORK/steps" ]
+}
+
+@test "a forbidden new lock stops update before Composer and migrations" {
+    make_update_repo
+    printf '{"packages":[{"name":"laravel/framework","version":"v9.52.21"}]}' > "$SAFETY_WORK/upstream/composer.lock"
+    git -C "$SAFETY_WORK/upstream" add composer.lock
+    git -C "$SAFETY_WORK/upstream" commit -qm 'Add forbidden fixture lock'
+    export TEST_LOCK_FAIL=1
+    run_update
+    [ "$status" = 1 ]
+    [[ "$output" == *"Update failed at step: Checking locked runtime dependencies"* ]]
+    [ "$(cat "$SAFETY_WORK/steps")" = down-old ]
+    [ -e "$SAFETY_WORK/maintenance" ]
+    [ ! -e "$SAFETY_WORK/migration-called" ]
 }
 
 @test "composer failure after switching code preserves maintenance and rollback instructions" {

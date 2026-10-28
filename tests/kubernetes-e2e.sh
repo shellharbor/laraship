@@ -35,14 +35,17 @@ docker run --rm --user 1000:1000 --read-only "$CLI_IMAGE" kubernetes render \
     --name smoke --namespace smoke --image "$APP_IMAGE" --configmap smoke-config --secret smoke-secret --revision test --worker > "$WORK/render.json"
 if docker run --rm "$CLI_IMAGE" list; then echo 'Compose runner accepted missing host binds' >&2; exit 1; fi
 echo '==> prepare a real Laravel fixture and build the immutable application'
+# Composer's binary comes from its pinned image, but executes only on patched PHP.
+docker build -q --target tooling -t laraship:k8s-composer -f "$ROOT/kubernetes/application/Dockerfile" "$WORK/app" >/dev/null
 # Keep bind-mounted files owned by the operator, including on non-root CI runners.
 COMPOSER_RUN=(docker run --rm --user "$(id -u):$(id -g)" \
+    --entrypoint composer \
     -e HOME=/tmp -e COMPOSER_HOME=/tmp/composer \
-    -v "$WORK/app:/app" -w /app composer:2.10.3)
+    -v "$WORK/app:/app" -w /app laraship:k8s-composer)
 "${COMPOSER_RUN[@]}" \
     create-project --no-interaction --no-scripts --no-install laravel/laravel . "${K8S_LARAVEL:-13.0.0}" >/dev/null
 # composer.lock is generated on purpose in this temporary test fixture; production uses its committed lock.
-"${COMPOSER_RUN[@]}" config platform.php 8.3.35 >/dev/null
+"${COMPOSER_RUN[@]}" config platform.php 8.3.36 >/dev/null
 "${COMPOSER_RUN[@]}" \
     update --no-interaction --no-scripts --no-plugins --no-install >/dev/null
 printf 'IMAGE_SECRET_MUST_NOT_EXIST=fixture-secret\n' > "$WORK/app/.env"

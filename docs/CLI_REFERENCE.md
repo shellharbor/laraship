@@ -1,6 +1,6 @@
 # LaraShip CLI reference and configurator contract
 
-Verified against repository `VERSION=1.3.2` on 2026-10-28. This is a complete reference to the public deployment, management, Python-adapter and Kubernetes arguments in that source version, intended as implementation context for the [LaraShip command builder](https://shellharbor.github.io/laraship-docs/#configure). It describes actual parser behavior, including compatibility flags and limitations that are easy to miss in short help output. Future releases may change the contract; version the configurator's option catalog with the toolkit it targets.
+Verified against repository `VERSION=1.3.3` on 2026-10-28. This is a complete reference to the public deployment, management, Python-adapter and Kubernetes arguments in that source version, intended as implementation context for the [LaraShip command builder](https://shellharbor.github.io/laraship-docs/#configure). It describes actual parser behavior, including compatibility flags and limitations that are easy to miss in short help output. Future releases may change the contract; version the configurator's option catalog with the toolkit it targets.
 
 All examples are Bash commands for the target Linux server. `shop.example.com`, addresses and paths are examples, not credentials. Installations and management operations require the documented server permissions; the website only constructs commands. Internal helper function arguments and test-harness controls are not public deployment options.
 
@@ -35,8 +35,8 @@ LaraShip has two deployment models: the original Linux/Compose provisioner and a
 | List projects | `bash list-projects.sh` | `list` | `laraship list ADAPTER_ARGS` |
 | Toolkit version | `bash deploy-laravel.sh --version` | `--version` or `-V` | `laraship toolkit-version ADAPTER_ARGS` |
 | Adapter/package version | Not applicable | Not applicable | `laraship --version` |
-| Install toolkit/pull CLI image | Download the release toolkit | `docker pull shellharbor/laraship:1.3.2` on the host | `laraship install INSTALL_ARGS` |
-| Render/deploy Kubernetes resources | `bash kubernetes.sh render\|deploy ARGS` | `kubernetes render\|deploy ARGS` | No Kubernetes subcommand in Python CLI 1.3.2 |
+| Install toolkit/pull CLI image | Download the release toolkit | `docker pull shellharbor/laraship:1.3.3` on the host | `laraship install INSTALL_ARGS` |
+| Render/deploy Kubernetes resources | `bash kubernetes.sh render\|deploy ARGS` | `kubernetes render\|deploy ARGS` | No Kubernetes subcommand in Python CLI 1.3.3 |
 
 Docker also accepts these script-name aliases: `deploy-laravel.sh`, `update.sh`, `backup.sh`, `activate.sh`, `deactivate.sh`, `remove.sh`, `list-projects.sh`. Its top-level help accepts `--help`, `-h`, or `help`; an omitted command shows help. An unknown Docker command exits with code 2. Python does not expose these script-name aliases.
 
@@ -248,12 +248,14 @@ Presets cannot contain another `PRESET`; shipped presets deliberately contain no
 | Key | Current value | Meaning |
 |---|---|---|
 | `LARAVEL_VERSION` | `13.0` | Default fresh skeleton `^13.0`; accepts `X.Y`. |
-| `LARAVEL_MIN_VERSION` | `12.0` | Minimum accepted `--laravel-version`, also `X.Y`. |
+| `LARAVEL_MIN_VERSION` | `12.0` | Minimum accepted `--laravel-version`, also `X.Y`. Can raise the mandatory 12.0 floor; lowering it is rejected. |
 | `FILAMENT_VERSION` | `^5.0` | Filament Composer constraint. |
 | `POSTGRES_IMAGE` | `postgres:17` | New container PostgreSQL deployments. |
 | `MYSQL_IMAGE` | `mysql:8.4` | New container MySQL deployments, 8.4 LTS. |
 
-The file is read next to the deployment script, parsed rather than sourced. Only these keys are accepted; database image values require an `image:tag` form, not a digest. Changing it does not upgrade existing project copies or database volumes. The Docker CLI image contains its own release copy; passing `-e POSTGRES_IMAGE=...` does not override it. No public deployment flag selects PHP, PECL or Composer versions. The default PHP template is 8.3.35; changing to the supplied PHP 8.2.34 template is a manual application-compatible build change, not a configurator switch. Laravel 13 requires the PHP 8.3 path.
+The file is read next to the deployment script, parsed rather than sourced. Only these keys are accepted; database image values require an `image:tag` form, not a digest. Changing it does not upgrade existing project copies or database volumes. The Docker CLI image contains its own release copy; passing `-e POSTGRES_IMAGE=...` does not override it. No public deployment flag selects PHP, PECL or Composer versions. The default PHP template is 8.3.36; changing to the supplied PHP 8.2.35 template is a manual application-compatible build change, not a configurator switch. Laravel 13 requires the PHP 8.3 path.
+
+The mandatory [security policy](SECURITY_POLICY.md) accepts only stable PHP 8.2.35+, 8.3.36+, 8.4.27+ or 8.5.12+ within those branches. PHP 8.1 and older, earlier patches, prereleases and unreviewed branches are rejected by actual runtime checks. The existing Laravel 12 minimum cannot be lowered. Kubernetes guards require PHP CLI and `/app/composer.lock` in custom application images. The 8.4/8.5 policy branches do not add a PHP selector or bundled templates.
 
 ### Relevant runtime environment
 
@@ -393,13 +395,13 @@ sudo bash /opt/laraship/list-projects.sh
 Install the published adapter in a venv or with pipx. Python requirement is 3.10+; there are no runtime package dependencies. The native toolkit/Docker image is installed or pulled separately.
 
 ```bash
-pipx install laraship==1.3.2
+pipx install laraship==1.3.3
 # Alternative, inside an activated virtual environment:
-python -m pip install laraship==1.3.2
+python -m pip install laraship==1.3.3
 
 laraship --version
-laraship install --backend native --version 1.3.2 --directory /opt/laraship
-laraship install --backend docker --version 1.3.2
+laraship install --backend native --version 1.3.3 --directory /opt/laraship
+laraship install --backend docker --version 1.3.3
 ```
 
 Creating `/opt/laraship` needs sufficient permissions; use `sudo` with the absolute installed CLI path when required, or select a new directory in an existing user-owned parent. Package installation itself does not deploy applications or install a host Docker daemon.
@@ -412,7 +414,7 @@ Creating `/opt/laraship` needs sufficient permissions; use `sudo` with the absol
 | Top-level `--version` | — | Show installed **Python package** version, not toolkit version. No top-level `-V` alias. |
 | `install -h`, `install --help` | — | Installation help. |
 | `install --backend native\|docker` | `native` | Download/extract a native toolkit release, or pull official CLI image. |
-| `install --version RELEASE` | Package release `1.3.2` | Exact raw release spelling such as `1.3.2` or `1.3.2-rc.1`, without leading `v`. Not `latest`, ranges or a Laravel version. |
+| `install --version RELEASE` | Package release `1.3.3` | Exact raw release spelling such as `1.3.3` or `1.3.3-rc.1`, without leading `v`. Not `latest`, ranges or a Laravel version. |
 | `install --directory PATH` | `/opt/laraship` | New native toolkit destination. Must be absolute, without `..` components, commas, NUL, CR or LF, no symlink components, existing parent and nonexistent destination. Ignored for Docker installation. |
 | `install --dry-run` | Off | Show installation/pull plan without network or writes. A native preview still validates destination constraints. |
 
@@ -427,7 +429,7 @@ These apply to each of `deploy`, `update`, `backup`, `activate`, `deactivate`, `
 | `-h`, `--help` before `--` | — | Help for this adapter subcommand. For backend help, put it after `--`, only where supported. |
 | `--backend native\|docker` | `native` | Select execution backend. Does not install it automatically. |
 | `--directory PATH` | `/opt/laraship` | Installed native toolkit path. Ignored by Docker backend. |
-| `--image IMAGE` | `shellharbor/laraship:1.3.2` | Docker backend only. Exact release tag or lowercase SHA-256 digest. Mutable `latest` aliases are refused. Current parser accepts lowercase repository components/slashes; it does not support a registry-host port or arbitrary nonrelease tag. |
+| `--image IMAGE` | `shellharbor/laraship:1.3.3` | Docker backend only. Exact release tag or lowercase SHA-256 digest. Mutable `latest` aliases are refused. Current parser accepts lowercase repository components/slashes; it does not support a registry-host port or arbitrary nonrelease tag. |
 | `--archive-dir PATH` | `/var/backups/laraship` | Docker project-ZIP directory and identical host bind. Must be separate from protected server/runtime paths. Does not change native ZIP output; use `LARASHIP_ARCHIVE_DIR` for native. |
 | `--mount-readonly ABSOLUTE_PATH` | None; repeatable | Docker only: expose an existing host file/directory at that same absolute path, read-only. Refuses mounts hiding protected toolkit/server paths. Use for config, SSH key, hook/token or a local repository input. |
 | `--` | Separator | Everything after it belongs to the selected Bash command. Preserve token boundaries exactly. |
@@ -440,11 +442,11 @@ For isolated Docker inspection, put `--dry-run`, `--help`, `-h`, `--version`, `-
 laraship deploy --backend native --directory /opt/laraship -- \
   --dry-run --slug shop --domain shop.example.com --db-type postgres --no-ssl
 
-laraship deploy --backend docker --image shellharbor/laraship:1.3.2 -- \
+laraship deploy --backend docker --image shellharbor/laraship:1.3.3 -- \
   --dry-run --slug shop --domain shop.example.com --db-type postgres --no-ssl
 
 LARASHIP_CLI="$(command -v laraship)"
-sudo "$LARASHIP_CLI" deploy --backend docker --image shellharbor/laraship:1.3.2 \
+sudo "$LARASHIP_CLI" deploy --backend docker --image shellharbor/laraship:1.3.3 \
   --mount-readonly /opt/laraship-input -- \
   --config /opt/laraship-input/shop.conf
 ```
@@ -453,18 +455,18 @@ The adapter currently has no Kubernetes subcommand. Use native `kubernetes.sh` o
 
 ## Run through a temporary Docker container
 
-The official image is the administrative CLI, not the Laravel application's web image. It connects to the host's already running Linux Docker Engine; deployed application containers are siblings managed by that daemon. No Docker-in-Docker or `--privileged` is needed. The published 1.3.2 image targets `linux/amd64`; do not promise native ARM availability.
+The official image is the administrative CLI, not the Laravel application's web image. It connects to the host's already running Linux Docker Engine; deployed application containers are siblings managed by that daemon. No Docker-in-Docker or `--privileged` is needed. The published 1.3.3 image targets `linux/amd64`; do not promise native ARM availability.
 
 ### Inspect without server access
 
 ```bash
-docker pull shellharbor/laraship:1.3.2
+docker pull shellharbor/laraship:1.3.3
 docker run --rm --init --network none --read-only --tmpfs /tmp \
-  shellharbor/laraship:1.3.2 --version
+  shellharbor/laraship:1.3.3 --version
 docker run --rm --init --network none --read-only --tmpfs /tmp \
-  shellharbor/laraship:1.3.2 deploy --help
+  shellharbor/laraship:1.3.3 deploy --help
 docker run --rm --init --network none --read-only --tmpfs /tmp \
-  shellharbor/laraship:1.3.2 deploy --dry-run \
+  shellharbor/laraship:1.3.3 deploy --dry-run \
   --slug shop --domain shop.example.com --db-type postgres --no-ssl
 ```
 
@@ -483,7 +485,7 @@ sudo docker run --rm --init -it --network host \
   --mount type=bind,src=/var/www,dst=/var/www \
   --mount type=bind,src=/run/lock/laraship,dst=/run/lock/laraship \
   --mount type=bind,src=/var/backups/laraship,dst=/var/backups/laraship \
-  shellharbor/laraship:1.3.2 deploy \
+  shellharbor/laraship:1.3.3 deploy \
   --slug shop --domain shop.example.com --db-type postgres \
   --ssl-email admin@example.com --with redis,queue,backup --create-backup
 ```
@@ -501,7 +503,7 @@ laraship_docker() {
     --mount type=bind,src=/var/www,dst=/var/www \
     --mount type=bind,src=/run/lock/laraship,dst=/run/lock/laraship \
     --mount type=bind,src=/var/backups/laraship,dst=/var/backups/laraship \
-    shellharbor/laraship:1.3.2 "$@"
+    shellharbor/laraship:1.3.3 "$@"
 }
 laraship_docker list
 laraship_docker backup --slug shop now
@@ -518,7 +520,7 @@ sudo docker run --rm --init -it --network host \
   --mount type=bind,src=/run/lock/laraship,dst=/run/lock/laraship \
   --mount type=bind,src=/var/backups/laraship,dst=/var/backups/laraship \
   --mount type=bind,src=/opt/laraship-input,dst=/opt/laraship-input,readonly \
-  shellharbor/laraship:1.3.2 deploy --config /opt/laraship-input/shop.conf \
+  shellharbor/laraship:1.3.3 deploy --config /opt/laraship-input/shop.conf \
   --on-complete /opt/laraship-input/notify.sh \
   --completion-endpoint https://control.example.com/api/deployments \
   --completion-token-file /opt/laraship-input/api-token
@@ -537,7 +539,7 @@ Prepare the same four host paths as above, plus the root-owned input directory c
 ```yaml
 services:
   laraship:
-    image: shellharbor/laraship:1.3.2
+    image: shellharbor/laraship:1.3.3
     profiles: [tools]
     user: "0:0"
     init: true
@@ -605,7 +607,7 @@ This administrative Compose runner deliberately uses root, host networking and a
 
 ## Kubernetes adapter and every argument
 
-Native: `bash /opt/laraship/kubernetes.sh render|deploy OPTIONS`. Docker: `shellharbor/laraship:1.3.2 kubernetes render|deploy OPTIONS`. The CLI image itself is not the application image passed to `--image`; build the existing Laravel app with the [application-image template](../kubernetes/application/Dockerfile) and follow the [Kubernetes guide](KUBERNETES.md).
+Native: `bash /opt/laraship/kubernetes.sh render|deploy OPTIONS`. Docker: `shellharbor/laraship:1.3.3 kubernetes render|deploy OPTIONS`. The CLI image itself is not the application image passed to `--image`; build the existing Laravel app with the [application-image template](../kubernetes/application/Dockerfile) and follow the [Kubernetes guide](KUBERNETES.md).
 
 | Argument | Default | Contract |
 |---|---|---|
@@ -633,7 +635,7 @@ Generated resources are a migration Job, web Deployment, ClusterIP Service and w
 ```bash
 docker run --rm --init --user "$(id -u):$(id -g)" \
   --network none --read-only --tmpfs /tmp \
-  shellharbor/laraship:1.3.2 kubernetes render \
+  shellharbor/laraship:1.3.3 kubernetes render \
   --name shop --namespace shop --image registry.example.com/shop:1.0 \
   --configmap shop-config-v1 --secret shop-secret-v1 --revision release-1 \
   --replicas 2 --worker
@@ -646,7 +648,7 @@ docker run --rm --init --user "$(id -u):$(id -g)" \
   --read-only --tmpfs /tmp \
   --mount type=bind,src="$PWD/kubeconfig",dst=/config/kubeconfig,readonly \
   -e KUBECONFIG=/config/kubeconfig \
-  shellharbor/laraship:1.3.2 kubernetes deploy --context YOUR_CONTEXT \
+  shellharbor/laraship:1.3.3 kubernetes deploy --context YOUR_CONTEXT \
   --name shop --namespace shop --image registry.example.com/shop:1.0 \
   --configmap shop-config-v1 --secret shop-secret-v1 --revision release-1 \
   --replicas 2 --worker

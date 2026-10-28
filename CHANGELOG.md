@@ -28,6 +28,26 @@ After every task with file changes, briefly record what changed and why: feature
 - 2026-10-04: translated all AI-KIT documents, adapters, rules, templates, and the bootstrap prompt into English; established English as the language for future kit updates.
 - 2026-10-04: extended the English language requirement to all authored project content and agent communication, including code, UI text, logs, Git messages, reviews, and reports, so future project work follows one language policy.
 
+## 1.3.3
+
+LaraShip 1.3.3 enforces patched PHP runtimes after CVE-2026-109618 and CVE-2026-109619 across Compose and Kubernetes deployment paths. It also prevents retired Laravel versions from bypassing the existing security minimum through configuration or unlocked repositories.
+
+### Security
+
+- Require stable PHP 8.2.35+, 8.3.36+, 8.4.27+ or 8.5.12+ within their reviewed branches after CVE-2026-109618/CVE-2026-109619; forbid PHP 8.1 and older, earlier patches, prereleases and unreviewed branches. Update Compose pins/digests to 8.3.36 and 8.2.35 and the Kubernetes Apache pin/digest to 8.3.36.
+- Check actual Compose PHP before deployment/update and locked Laravel dependencies before continuing. Kubernetes migration/web/worker Pods validate their own image in a restricted init container before starting. Keep the stronger existing Laravel 12 minimum mandatory, including `versions.env`; Laravel below 10 and retired 10/11 remain unavailable.
+- Resolve repositories without a lock file without installing dependencies or running scripts/plugins, then enforce the Laravel policy before installation even if the input repository disables Composer advisory blocking. Recheck dependencies after module installation.
+- Run Kubernetes fixture Composer on patched PHP rather than the Composer image's independent PHP runtime. Add boundary/lockfile, downgrade, build-policy synchronization, update refusal and custom Kubernetes-image guards; document existing-installation upgrades and synchronize local agent rules.
+
+### Upgrade notes
+
+- Existing application PHP images must be deliberately rebuilt from the complete updated PHP build directory. Updating pip/pipx, the administrative Docker image or the toolkit alone does not replace them; `update.sh` refuses older runtimes before maintenance. Custom Kubernetes application images must provide PHP CLI and `/app/composer.lock`. See [the runtime security policy](docs/SECURITY_POLICY.md).
+
+### Documentation and verification
+
+- Align VERSION, Python package defaults and current native/Docker/Python/command-builder examples to 1.3.3; document the security policy, Kubernetes image requirements and existing-installation rebuild procedure.
+- Verify policy boundaries, update refusal and completion reporting, real Compose/rendered Kubernetes guards, patched PHP 8.3.36/Laravel 13 and PHP 8.2.35/Laravel 12 runtimes, database I/O and graceful FPM shutdown. Real Composer refuses an unlocked retired framework before installation even when the input repository disables advisory blocking.
+
 ## 1.3.2
 
 LaraShip 1.3.2 fixes deployment stalling at project Nginx validation/reload when the installer runs from an interactive terminal, including SSH and tmux sessions.

@@ -4,6 +4,7 @@ import argparse
 import copy
 import hashlib
 import json
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -79,6 +80,12 @@ def resources(args: argparse.Namespace) -> list[dict]:
         "volumes": [{"name": name, "emptyDir": {"sizeLimit": "256Mi"}}
                     for name in ("tmp", "storage", "cache")],
     }
+    # Check the actual image before migrations, web or workers, including custom images.
+    policy = (Path(__file__).resolve().parents[1] / "laravel/.docker/php/security-policy.php").read_text(encoding="utf-8")
+    guard = copy.deepcopy(container)
+    guard.update({"name": "runtime-security", "command": ["php", "-r",
+                  policy.removeprefix("<?php") + '\nlaraship_security_main(["/app/composer.lock"]);']})
+    pod["initContainers"] = [guard]
     if args.image_pull_secret:
         pod["imagePullSecrets"] = [{"name": args.image_pull_secret}]
     migration_pod = copy.deepcopy(pod)

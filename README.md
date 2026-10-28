@@ -22,11 +22,11 @@
 
 The `laraship` folder is self-contained: it holds the deploy script, templates, management utilities, examples and a skill for Claude Code. Copy it to the server as a whole (for example, to `/opt/laraship/`) and run the scripts **on the server as root**. From your workstation (for example, Windows) connect to the server over SSH.
 
-LaraShip also has a **CLI Docker image**, [`shellharbor/laraship:1.3.2`](https://hub.docker.com/r/shellharbor/laraship), with the same Bash tools and their dependencies, plus a separate **Kubernetes backend** for existing applications built into immutable images. Native Bash remains supported. See [published-image examples](#run-from-docker-hub), [Docker runner](docs/CONTAINERS.md) and [Kubernetes deployment, image contract and scope](docs/KUBERNETES.md). Existing Compose projects and database volumes are not converted automatically.
+LaraShip also has a **CLI Docker image**, [`shellharbor/laraship:1.3.3`](https://hub.docker.com/r/shellharbor/laraship), with the same Bash tools and their dependencies, plus a separate **Kubernetes backend** for existing applications built into immutable images. Native Bash remains supported. See [published-image examples](#run-from-docker-hub), [Docker runner](docs/CONTAINERS.md) and [Kubernetes deployment, image contract and scope](docs/KUBERNETES.md). Existing Compose projects and database volumes are not converted automatically.
 
 The **[Python CLI](docs/PYTHON.md)** adds installation through pip or pipx and a `laraship` command for the native and Docker backends. It downloads verified toolkit releases or runs the published CLI image. Release 1.3.0 adds PyPI packaging; a reviewed checkout can also be installed with `pipx install .`.
 
-For the complete option catalog, config keys, dependencies, lifecycle commands and command-builder integration context, see the **[CLI reference](docs/CLI_REFERENCE.md)**. It also includes temporary Docker runner and one-off Docker Compose service examples for `shellharbor/laraship:1.3.2`.
+For the complete option catalog, config keys, dependencies, lifecycle commands and command-builder integration context, see the **[CLI reference](docs/CLI_REFERENCE.md)**. It also includes temporary Docker runner and one-off Docker Compose service examples for `shellharbor/laraship:1.3.3`.
 
 The default PostgreSQL image remains 17. See the **[PostgreSQL 18 verification report](docs/POSTGRES18.md)** for tested scenarios, the data-directory contract and migration limits.
 
@@ -144,7 +144,7 @@ Besides files, a project has:
 
 | Service | Container | Image | Purpose |
 |---|---|---|---|
-| `php` | `<slug>_php` | `php83.Dockerfile` (PHP 8.3.35-FPM) | Runs Laravel as UID/GID 1000. Port 9000 is published only on `127.0.0.1:${PHP_PORT}`; a local FastCGI ping checks FPM liveness |
+| `php` | `<slug>_php` | `php83.Dockerfile` (PHP 8.3.36-FPM) | Runs Laravel as UID/GID 1000. Port 9000 is published only on `127.0.0.1:${PHP_PORT}`; a local FastCGI ping checks FPM liveness |
 | `nginx` | `<slug>_nginx` | `nginx-1.29.1.Dockerfile` | The project's web server, `root /var/www/html/public`. Ports `SITE_PORT_HTTP` → 80 and `SITE_PORT_HTTPS` → 443. Runs `nginx -s reload` every 6 hours to pick up a renewed certificate |
 | `db` | `<slug>_db` | Docker Official Image `postgres:17` or `mysql:8.4` | The project's database. Host port `DB_PORT` → 5432/3306. The template contains `db_postgres` and `db_mysql`: the unused one is removed, the chosen one is renamed to `db`. With `--db-native` both are removed |
 | `redis` | `<slug>_redis` | `redis:7-alpine` | Redis with a password (`--requirepass`) and AOF. Host port `REDIS_PORT` → 6379 |
@@ -188,13 +188,13 @@ The `artisan`, `composer`, `npm` and `permissions` utilities have no profile. Be
 Python 3.10+ is required. Install the release's isolated CLI with pipx:
 
 ```bash
-pipx install laraship==1.3.2
+pipx install laraship==1.3.3
 laraship --help
-laraship install --backend native --version 1.3.2 --dry-run
-laraship install --backend docker --version 1.3.2 --dry-run
+laraship install --backend native --version 1.3.3 --dry-run
+laraship install --backend docker --version 1.3.3 --dry-run
 ```
 
-Alternatively, use `python -m pip install laraship==1.3.2` inside a virtual environment. Before publication, or to review a source checkout, use `pipx install .`. The Python package has no runtime dependencies and only installs its CLI; installation/deployment are explicit commands. Server operations retain their Ubuntu/Linux, root and Docker requirements. See the [Python guide](docs/PYTHON.md) for actual installation, argument forwarding, Docker mounts, updates and PyPI Trusted Publishing setup.
+Alternatively, use `python -m pip install laraship==1.3.3` inside a virtual environment. Before publication, or to review a source checkout, use `pipx install .`. The Python package has no runtime dependencies and only installs its CLI; installation/deployment are explicit commands. Server operations retain their Ubuntu/Linux, root and Docker requirements. See the [Python guide](docs/PYTHON.md) for actual installation, argument forwarding, Docker mounts, updates and PyPI Trusted Publishing setup.
 
 ## Quick start
 
@@ -218,7 +218,7 @@ You can also put the folder into a separate git repository and run `git clone` o
 **Or install a release.** Every release is published on GitHub as a tarball with a SHA-256 checksum:
 
 ```bash
-VERSION=1.3.2
+VERSION=1.3.3
 curl -fsSLO https://github.com/shellharbor/laraship/releases/download/v${VERSION}/laraship-${VERSION}.tar.gz
 curl -fsSLO https://github.com/shellharbor/laraship/releases/download/v${VERSION}/laraship-${VERSION}.tar.gz.sha256
 sha256sum -c laraship-${VERSION}.tar.gz.sha256
@@ -260,15 +260,15 @@ bash /opt/laraship/deploy-laravel.sh --help
 
 ## Run from Docker Hub
 
-The release image `shellharbor/laraship:1.3.2` targets `linux/amd64`. Docker Engine must already be installed and running. The image packages the toolkit and its dependencies, so downloading the source folder is optional for this runner.
+The release image `shellharbor/laraship:1.3.3` targets `linux/amd64`. Docker Engine must already be installed and running. The image packages the toolkit and its dependencies, so downloading the source folder is optional for this runner.
 
 ### Pull, inspect and preview
 
 ```bash
-docker pull shellharbor/laraship:1.3.2
-docker run --rm shellharbor/laraship:1.3.2 --version
-docker run --rm shellharbor/laraship:1.3.2 --help
-docker run --rm shellharbor/laraship:1.3.2 deploy --dry-run \
+docker pull shellharbor/laraship:1.3.3
+docker run --rm shellharbor/laraship:1.3.3 --version
+docker run --rm shellharbor/laraship:1.3.3 --help
+docker run --rm shellharbor/laraship:1.3.3 deploy --dry-run \
   --slug shop --domain shop.example.com --db-type postgres --no-ssl
 ```
 
@@ -288,7 +288,7 @@ laraship_docker() {
     --mount type=bind,src=/var/www,dst=/var/www \
     --mount type=bind,src=/run/lock/laraship,dst=/run/lock/laraship \
     --mount type=bind,src=/var/backups/laraship,dst=/var/backups/laraship \
-    shellharbor/laraship:1.3.2 "$@"
+    shellharbor/laraship:1.3.3 "$@"
 }
 ```
 
@@ -319,7 +319,7 @@ The same image can render manifests as your current user with a read-only root f
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" --read-only --tmpfs /tmp \
-  shellharbor/laraship:1.3.2 kubernetes render \
+  shellharbor/laraship:1.3.3 kubernetes render \
   --name shop --namespace shop --image registry.example.com/shop:1.0.0 \
   --configmap shop-config-v1 --secret shop-secret-v1 --revision v1 \
   > shop.k8s.yaml
@@ -503,7 +503,9 @@ Editing this file selects versions for **new deployments**. Database major upgra
 
 ### PHP runtime images
 
-The Compose templates pin PHP **8.3.35** (default) and **8.2.34** (manual alternative for compatible applications), Composer **2.10.3**, phpredis **6.3.0** and APCu **5.1.28**. PHP, Composer and the Debian Bookworm runtime use multi-architecture image digests. The shared `laravel/.docker/php/build-extensions.sh` verifies the PECL archives against fixed SHA-256 checksums before compiling them.
+The Compose templates pin PHP **8.3.36** (default) and **8.2.35** (manual alternative for compatible applications), Composer **2.10.3**, phpredis **6.3.0** and APCu **5.1.28**. PHP, Composer and the Debian Bookworm runtime use multi-architecture image digests. The shared `laravel/.docker/php/build-extensions.sh` verifies the PECL archives against fixed SHA-256 checksums before compiling them.
+
+**Mandatory security policy:** PHP must be a stable release in one of these reviewed branches: **8.2.35+**, **8.3.36+**, **8.4.27+** or **8.5.12+**. PHP 8.1 and older, earlier patches, prereleases and unreviewed branches are rejected. These floors address [CVE-2026-109618 and CVE-2026-109619](https://www.php.net/index.php). They do not add automatic PHP 8.4/8.5 selection or new templates. The actual Compose runtime is checked before installation and updates; Kubernetes checks the actual application image in an init container before migrations, web or workers start. Locked Laravel dependencies are checked as well. Laravel below 10 is forbidden; the existing stronger **Laravel 12** minimum remains mandatory and `LARAVEL_MIN_VERSION` can only raise it. See the [security policy and existing-installation upgrade procedure](docs/SECURITY_POLICY.md).
 
 Compilation happens in a separate stage. The runtime contains PHP CLI/FPM, its existing extensions, required shared libraries, Composer, Git/SSH, curl/OpenSSL, ZIP/unzip and a FastCGI probe. It excludes compilers, development headers, PECL, editors, debugging tools and optional mail/media/antivirus services. Applications using those optional commands or system fonts need an explicit custom build or external service. Bookworm packages still receive repository updates; these pins do not promise byte-for-byte identical rebuilds. Update the pins and PECL checksums deliberately and rerun the image checks. See [ADR-0007](docs/adr/0007-pinned-php-runtime.md).
 
@@ -1667,13 +1669,13 @@ The E2E workflow has two more jobs, `e2e-repo` (for `--repo` and `update.sh`) an
 
 The badges at the top of the file point to the `shellharbor/laraship` repository; if you rename or fork it, update the paths in all badge links.
 
-Release publication requires completed successful `lint.yml`, `tests.yml`, `e2e.yml`, `codeql.yml` and `kubernetes.yml` main/master push runs for the exact tagged commit. Missing, failed or running checks block publication; an earlier green commit is insufficient. The release version is **1.3.2**; see its [changes and publication notes](CHANGELOG.md#132). Unassigned changes remain under Unreleased.
+Release publication requires completed successful `lint.yml`, `tests.yml`, `e2e.yml`, `codeql.yml` and `kubernetes.yml` main/master push runs for the exact tagged commit. Missing, failed or running checks block publication; an earlier green commit is insufficient. The release version is **1.3.3**; see its [changes and publication notes](CHANGELOG.md#133). Unassigned changes remain under Unreleased.
 
 Prepare releases in this order:
 
 1. Set `VERSION` to the intended version and add the matching numeric section in `CHANGELOG.md`. Commit these files together with the release changes.
 2. Push that commit to main/master and wait for all five required workflows to finish successfully for that exact SHA.
-3. Create and push the matching tag, such as `v1.3.2`, pointing to that verified commit. The native CLI version, archive and Docker Hub image derive from its committed `VERSION` file.
+3. Create and push the matching tag, such as `v1.3.3`, pointing to that verified commit. The native CLI version, archive and Docker Hub image derive from its committed `VERSION` file.
 
 Release 1.3.0 introduces Python packaging and deployment completion hooks. Older tags do not contain these features; never move an existing tag to include later changes.
 

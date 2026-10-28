@@ -37,6 +37,7 @@ for fn in assign_ports validate_port_values check_port_availability install_dock
     eval "$fn() { :; }"
 done
 create_project() { PROJECT_DIR="$WWW_DIR/$SLUG"; mkdir "$PROJECT_DIR"; }
+check_project_security() { [[ "${TEST_FAILURE:-}" != security ]]; }
 install_laravel() {
     local ignored
     ignored="$(printf subshell)"; (true)
@@ -194,7 +195,7 @@ class CompletionIntegrationTests(unittest.TestCase):
         self.assertFalse(report["ssl"]["enabled"])
 
     def test_early_and_late_failures_preserve_the_original_status(self):
-        for failure, code, stage in (("application", 17, "application_install"), ("archive", 19, "archive"),
+        for failure, code, stage in (("application", 17, "application_install"), ("security", 1, "application_install"), ("archive", 19, "archive"),
                                      ("post_deploy", 1, "post_deploy")):
             with self.subTest(failure=failure):
                 shutil.rmtree(self.directory / "www", ignore_errors=True)

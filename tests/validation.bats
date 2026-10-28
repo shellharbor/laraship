@@ -241,6 +241,13 @@ setup() { require_root; }
     assert_rejected "Invalid LARAVEL_MIN_VERSION in versions.env"
 }
 
+@test "versions.env cannot lower the mandatory Laravel security floor" {
+    for version in 0.0 9.0 10.0 11.0; do
+        run_deploy_from "$(versions_dir "LARAVEL_MIN_VERSION=${version}\n")" --domain x.test --db-type postgres --no-ssl --dry-run --laravel-version 9.0
+        assert_rejected "LARAVEL_MIN_VERSION cannot be lower than the mandatory security minimum 12.0"
+    done
+}
+
 @test "versions.env: --laravel-version overrides it" {
     # 12.0 passes the version checks, so the run stops at the missing template folder of the copy
     run_deploy_from "$(versions_dir 'LARAVEL_VERSION=9.0\n')" --domain x.test --db-type postgres --no-ssl --laravel-version 12.0

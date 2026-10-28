@@ -93,6 +93,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # shellcheck source=lib/runtime.sh
 source "$SCRIPT_DIR/lib/runtime.sh"
+# shellcheck source=lib/security.sh
+source "$SCRIPT_DIR/lib/security.sh"
 # shellcheck source=lib/proxy.sh
 source "$SCRIPT_DIR/lib/proxy.sh"
 # shellcheck source=lib/completion.sh
@@ -186,6 +188,7 @@ load_versions() {
                 DEFAULT_LARAVEL_VERSION="$VALUE" ;;
             LARAVEL_MIN_VERSION)
                 [[ "$VALUE" =~ ^[0-9]+\.[0-9]+$ ]] || error "Invalid LARAVEL_MIN_VERSION in versions.env: ${VALUE} (expected X.Y, for example 12.0)"
+                [[ "$(printf '%s\n%s\n' 12.0 "$VALUE" | sort -V | head -n1)" == 12.0 ]] || error "LARAVEL_MIN_VERSION cannot be lower than the mandatory security minimum 12.0"
                 MIN_LARAVEL_VERSION="$VALUE" ;;
             FILAMENT_VERSION)
                 # A composer constraint: digits, letters, . ^ ~ * , < > = | space and -
@@ -1718,6 +1721,8 @@ build_and_start_project() {
 
     info "docker compose command completed successfully"
 
+    check_project_security "$PROJECT_DIR" || error "PHP security policy failed; rebuild the project with a supported patched PHP image"
+
     # Give the containers time to start
     info "Waiting for containers to start..."
     wait_for_database
@@ -1849,8 +1854,21 @@ install_from_repo() {
     info "Setting permissions..."
     docker compose run --rm permissions
 
-    info "Installing dependencies: composer install --no-dev --optimize-autoloader"
     local COMPOSER_LOG
+    if [[ ! -f "${APP_DIR}/composer.lock" ]]; then
+        info "Resolving repository dependencies without installing packages or running scripts/plugins..."
+        COMPOSER_LOG="$(mktemp)"
+        if ! docker compose run --rm composer update --no-install --no-dev --no-scripts --no-plugins \
+            --prefer-dist --no-progress --no-interaction 2>&1 | tee "$COMPOSER_LOG"; then
+            explain_composer_failure "$COMPOSER_LOG"
+            rm -f "$COMPOSER_LOG"
+            error "Dependency resolution failed. Check the logs above."
+        fi
+        rm -f "$COMPOSER_LOG"
+    fi
+    check_project_security "$PROJECT_DIR" /var/www/html/composer.lock || error "Repository dependencies violate the runtime security policy"
+
+    info "Installing dependencies: composer install --no-dev --optimize-autoloader"
     COMPOSER_LOG="$(mktemp)"
     if ! docker compose run --rm composer install --no-dev --optimize-autoloader --no-interaction 2>&1 | tee "$COMPOSER_LOG"; then
         explain_composer_failure "$COMPOSER_LOG"
@@ -2333,11 +2351,13 @@ main() {
     else
         install_laravel
     fi
+    check_project_security "$PROJECT_DIR" /var/www/html/composer.lock || error "Installed dependencies violate the runtime security policy"
     COMPLETION_STAGE=application_configure
     configure_laravel_env
     run_module_hook env "${PROJECT_DIR}/public_html/.env"
     COMPLETION_STAGE=modules_install
     install_modules
+    check_project_security "$PROJECT_DIR" /var/www/html/composer.lock || error "Module dependencies violate the runtime security policy"
     COMPLETION_STAGE=post_deploy
     run_post_deploy
     COMPLETION_STAGE=http_readiness

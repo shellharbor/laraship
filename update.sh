@@ -38,6 +38,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/runtime.sh
 source "$SCRIPT_DIR/lib/runtime.sh"
+# shellcheck source=lib/security.sh
+source "$SCRIPT_DIR/lib/security.sh"
 
 # ==================== Variables ====================
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -198,6 +200,7 @@ update_code() {
 update_worker() {
     cd "$PROJECT_DIR" || error "Failed to change to ${PROJECT_DIR}"
 
+    check_project_security "$PROJECT_DIR" || error "PHP security policy failed; rebuild with a supported patched PHP image before updating"
     info "Enabling maintenance mode..."
     art down --retry=60 || error "Cannot enable maintenance mode. Update stopped before changing application code."
     trap 'interrupt_update' HUP INT TERM
@@ -206,7 +209,13 @@ update_worker() {
 
     # New files come from root's git: give them back to uid 1000 before composer runs
     run_step "Setting permissions" docker compose run --rm --name "${SLUG}_update_permissions" permissions
+    if [[ ! -f public_html/composer.lock ]]; then
+        run_step "Resolving unlocked dependencies without installation" docker compose run --rm --name "${SLUG}_update_composer" composer update \
+            --no-install --no-dev --no-scripts --no-plugins --prefer-dist --no-progress --no-interaction
+    fi
+    run_step "Checking locked runtime dependencies" check_project_security "$PROJECT_DIR" /var/www/html/composer.lock
     run_step "composer install" docker compose run --rm --name "${SLUG}_update_composer" composer install --no-dev --optimize-autoloader --no-interaction
+    run_step "Checking installed runtime dependencies" check_project_security "$PROJECT_DIR" /var/www/html/composer.lock
 
     if [[ "$NO_MIGRATE" != true ]]; then
         run_step "artisan migrate" art migrate --force
@@ -254,7 +263,7 @@ main() {
 
     check_root
     parse_args "$@"
-    runtime_require python3 flock docker
+    runtime_require python3 flock docker timeout
     project_lock
     check_project
     prepare_update
