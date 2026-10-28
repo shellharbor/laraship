@@ -28,6 +28,24 @@ After every task with file changes, briefly record what changed and why: feature
 - 2026-10-04: translated all AI-KIT documents, adapters, rules, templates, and the bootstrap prompt into English; established English as the language for future kit updates.
 - 2026-10-04: extended the English language requirement to all authored project content and agent communication, including code, UI text, logs, Git messages, reviews, and reports, so future project work follows one language policy.
 
+## 1.3.2
+
+LaraShip 1.3.2 fixes deployment stalling at project Nginx validation/reload when the installer runs from an interactive terminal, including SSH and tmux sessions.
+
+### Fixed
+
+- Redirect stdin from `/dev/null` for both Nginx syntax-check and reload commands under `timeout`. `docker compose exec -T` still attaches stdin; a background process-group terminal read could stop the client with SIGTTIN and leave deployment waiting.
+- Keep the existing timeout, error handling, Nginx output and HTTP readiness checks while removing the unnecessary terminal input.
+
+### Tests and release
+
+- Add a controlling-terminal regression test that fails with the old implementation and passes with the fix; use a monotonic deadline and drain final terminal output before asserting success. Preserve the noninteractive and Nginx-failure checks.
+- Synchronize VERSION, current documentation examples, the administrative Docker image and the Python package on 1.3.2. Use the updated toolkit/image for subsequent invocations; existing application files and database volumes are not rewritten.
+
+### Upgrade notes
+
+- Updating pip/pipx alone does not replace an existing native toolkit directory. Update the native checkout or install 1.3.2 into a new directory and select it with `--directory`; Docker runners should use `shellharbor/laraship:1.3.2`.
+
 ## 1.3.1
 
 LaraShip 1.3.1 is a documentation and verification patch release. It adds a complete command-builder reference and publishes PostgreSQL 18 test results while preserving the deployment behavior and database defaults of 1.3.0.

@@ -66,12 +66,12 @@ Only the owner process finalizes; subshell exits do not send extra reports. HUP/
 
 ## Docker and Python CLI
 
-A Docker hook runs inside the administrative CLI container with its available tools. Mount hook/token files read-only at the same absolute paths, with the required Linux ownership/permissions. Completion support starts with release 1.3.0; the examples use image 1.3.1:
+A Docker hook runs inside the administrative CLI container with its available tools. Mount hook/token files read-only at the same absolute paths, with the required Linux ownership/permissions. Completion support starts with release 1.3.0; the examples use image 1.3.2:
 
 ```bash
-laraship install --backend docker --version 1.3.1
+laraship install --backend docker --version 1.3.2
 LARASHIP_CLI="$(command -v laraship)"
-sudo "$LARASHIP_CLI" deploy --backend docker --image shellharbor/laraship:1.3.1 \
+sudo "$LARASHIP_CLI" deploy --backend docker --image shellharbor/laraship:1.3.2 \
   --mount-readonly /opt/laraship-hooks -- \
   --slug shop --domain shop.example.com --db-type postgres \
   --ssl-email admin@example.com \

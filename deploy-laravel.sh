@@ -1652,10 +1652,12 @@ check_project_http() {
     CREDENTIALS=${CREDENTIALS//\"/\\\"}
     # Compose/module setup may recreate PHP; Nginx resolves a static FastCGI name only on reload.
     info "Validating and reloading project Nginx before HTTP readiness..."
+    # timeout runs Compose in a background process group; reading an interactive terminal
+    # there stops it with SIGTTIN, and a stopped client outlives the time limit.
     (
         cd "$PROJECT_DIR" || exit 1
-        timeout 10 docker compose exec -T nginx nginx -t &&
-            timeout 10 docker compose exec -T nginx nginx -s reload
+        timeout 10 docker compose exec -T nginx nginx -t < /dev/null &&
+            timeout 10 docker compose exec -T nginx nginx -s reload < /dev/null
     ) || error "Cannot validate/reload project Nginx; project data retained and shared proxy unchanged"
     info "Checking the project's HTTP response..."
     for ATTEMPT in {1..10}; do

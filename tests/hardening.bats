@@ -374,6 +374,43 @@ SH
         [[ "$output" == *"Cannot validate/reload project Nginx"* ]]
     done
 }
+@test "project Nginx checks under timeout do not stop on an interactive terminal" {
+    # The real timeout puts Compose in a background process group; a terminal read there stops it.
+    mkdir -p "$HARDEN_WORK/bin"
+    printf '#!/bin/bash\ntrap "" TERM\nIFS= read -r _ || true\n' > "$HARDEN_WORK/bin/docker"
+    chmod +x "$HARDEN_WORK/bin/docker"
+    run python3 - "$DEPLOY" "$HARDEN_WORK" <<'PY'
+import os, pty, select, signal, sys, time
+deploy, work = sys.argv[1:]
+pid, fd = pty.fork()
+if pid == 0:
+    os.environ["PATH"] = work + "/bin:" + os.environ["PATH"]
+    os.execvp("bash", ["bash", "-c", 'source "$1"; PROJECT_DIR="$2"; DOMAIN=x.test; PORT_HTTP=8100; '
+        'ENABLE_BASIC_AUTH=false; curl() { printf 200; }; check_project_http', "_", deploy, work])
+out, started = b"", time.monotonic()
+while time.monotonic() - started < 20:
+    if select.select([fd], [], [], 0.2)[0]:
+        try: out += os.read(fd, 4096)
+        except OSError: pass
+    done, code = os.waitpid(pid, os.WNOHANG)
+    if done:
+        # The child may finish between the read and waitpid; consume its final output.
+        while select.select([fd], [], [], 0)[0]:
+            try: chunk = os.read(fd, 4096)
+            except OSError: break
+            if not chunk: break
+            out += chunk
+        print(out.decode(errors="replace"))
+        sys.exit(0 if os.waitstatus_to_exitcode(code) == 0 and b"Project HTTP responds successfully" in out else 1)
+os.killpg(pid, signal.SIGKILL)
+for proc in os.listdir("/proc"):
+    try:
+        if proc.isdigit() and int(proc) != os.getpid() and work.encode() in open(f"/proc/{proc}/cmdline", "rb").read(): os.kill(int(proc), signal.SIGKILL)
+    except OSError: pass
+sys.exit("check_project_http hung on a terminal: " + out.decode(errors="replace"))
+PY
+    [ "$status" = 0 ] || { echo "$output" >&2; return 1; }
+}
 @test "restore stop failure restarts services and keeps maintenance with recovery instructions" {
     mkdir -p "$HARDEN_WORK/backups"; touch "$HARDEN_WORK/backups/valid.dump"
     run bash -c '
