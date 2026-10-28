@@ -4,9 +4,9 @@ After every task with file changes, briefly record what changed and why: feature
 
 ## Unreleased
 
-### Documentation
+### Verification
 
-- Add a dynamic PyPI version badge to the README linking to the published laraship package, alongside the Docker Hub and project badges.
+- Record authorized Docker-cache cleanup after host disk exhaustion: unused build cache and old dangling images removed, owned sandboxes/cache volume cleaned, and original application containers verified healthy; distinguish Docker-reclaimed cache from unchanged Windows VHD file size.
 
 ### AI-KIT
 
@@ -27,6 +27,28 @@ After every task with file changes, briefly record what changed and why: feature
 - Added a mandatory Kubernetes-ready standard for new Dockerfiles, containers, and microservices: portable images, configuration, security, shutdown, health checks, storage, and minimal manifests. Integrated the rule into instructions, context, the skill, and bootstrap so services are ready for Kubernetes from the start.
 - 2026-10-04: translated all AI-KIT documents, adapters, rules, templates, and the bootstrap prompt into English; established English as the language for future kit updates.
 - 2026-10-04: extended the English language requirement to all authored project content and agent communication, including code, UI text, logs, Git messages, reviews, and reports, so future project work follows one language policy.
+
+## 1.3.1
+
+LaraShip 1.3.1 is a documentation and verification patch release. It adds a complete command-builder reference and publishes PostgreSQL 18 test results while preserving the deployment behavior and database defaults of 1.3.0.
+
+### Documentation
+
+- Add the complete CLI reference: all 57 long deployment options, aliases, 50 config keys, defaults, validation, additive presets, module dependencies and lifecycle commands.
+- Document Python native/Docker argument forwarding, completion and legacy API payloads, Kubernetes arguments, temporary Docker execution and a one-off Docker Compose tools service.
+- Publish the PostgreSQL 18 verification report with the tested data-layout contract, logical-migration fixture adjustment and coverage limits.
+- Link the reference and PostgreSQL report from README; retain the PyPI badge added after 1.3.0 and refresh current installation examples for 1.3.1.
+
+### Verification
+
+- Validate PostgreSQL 18.6 against the 1.3.0 runtime: 103 checks passed with 10 expected scenario skips across Laravel 12/13, Filament/Horizon, backup/restore, Git update/recovery and logical legacy-17-to-official-18 transfer. The migration used a corrected volume root only in the disposable test fixture; tracked runtime/tests remain unchanged.
+- Verify the published 1.3.0 Python adapter through pip and pipx with native and Docker backends in four real deployment/lifecycle scenarios, including private completion delivery, persistence and argument forwarding.
+
+### Release and compatibility
+
+- Synchronize VERSION, Python package metadata and the administrative Docker image on 1.3.1. No new runtime options or automatic database upgrades are introduced.
+- Keep PostgreSQL 17 as the default. PostgreSQL 18 validation does not make an in-place image-tag change a supported major upgrade; use a separate logical migration and test the actual application data.
+- Completion hooks and Python packaging remain available from 1.3.0 onward. Existing project copies and database volumes are unchanged by upgrading the installer.
 
 ## 1.3.0
 
