@@ -66,6 +66,14 @@ class Fixture:
             time.sleep(1)
         raise RuntimeError(f'Fixture HTTP readiness did not return {expected}')
 
+    def require_running_roles(self, image):
+        for role in ('php', 'cron', 'queue'):
+            identifier = self.runner.compose(self.path, 'ps', '--status', 'running', '-q', role).decode().strip()
+            if not identifier:
+                raise RuntimeError(f'Fixture PHP role {role} is not running')
+            if self.runner.inspect('container', identifier)['Image'] != image:
+                raise RuntimeError(f'Fixture PHP role {role} is using an unexpected image')
+
     def create(self):
         self.path.mkdir(parents=True)
         shutil.copytree(ROOT / 'laravel/.docker/php', self.path / '.docker/php')
@@ -132,7 +140,10 @@ final class UpgradeProbe implements ShouldQueue
         services['nginx'] = {'image': 'nginx:1.29.1-alpine', 'ports': ['127.0.0.1:18880:80'],
             'volumes': ['./public_html:/var/www/html', './nginx.conf:/etc/nginx/conf.d/default.conf:ro']}
         write_json(self.path / 'docker-compose.yml', {'services': services, 'volumes': {'database': {}}})
-        self.runner.compose(self.path, 'up', '-d', '--no-build', 'db', 'php', 'cron', 'queue', 'nginx', timeout=300)
+        # A database-backed queue exits if MySQL or its jobs table is not ready.
+        # Such a stopped worker must remain stopped by the upgrader, so start it
+        # only after this fixture has initialized and seeded the database.
+        self.runner.compose(self.path, 'up', '-d', '--no-build', 'db', 'php', 'nginx', timeout=300)
         for attempt in range(60):
             try:
                 self.artisan('migrate', '--force', '--no-interaction')
@@ -163,6 +174,8 @@ final class UpgradeProbe implements ShouldQueue
             self.git(self.app, 'fetch', '--quiet', 'origin')
             self.git(self.app, 'reset', '--mixed', 'origin/main')
             (self.path / '.deploy-meta').write_text('REPO_BRANCH=main\n')
+        self.runner.compose(self.path, 'up', '-d', '--no-build', 'cron', 'queue', timeout=120)
+        self.require_running_roles(self.runner.inspect('image', self.image)['Id'])
         self.wait_http()
 
     def retained(self):
@@ -262,9 +275,8 @@ final class UpgradeProbe implements ShouldQueue
         config = json.loads(self.runner.compose(self.path, 'config', '--format', 'json'))
         for role in state['roles']:
             assert config['services'][role]['image'] == state['target_image']
-        for role in ('php', 'cron', 'queue'):
-            identifier = self.runner.compose(self.path, 'ps', '--status', 'running', '-q', role).decode().strip()
-            assert identifier and self.runner.inspect('container', identifier)['Image'] == state['target_image']
+        assert state['running_roles'] == ['php', 'cron', 'queue'], 'Fixture roles stopped before apply'
+        self.require_running_roles(state['target_image'])
         for name, value in prepared_assets.items():
             assert (tree_hash(self.app / name, source=False) if (self.app / name).exists() else None) == value
         self.retained()

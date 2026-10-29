@@ -56,7 +56,8 @@ LaraShip 1.4.0 adds managed Laravel, PHP and Filament upgrades through the same 
 ### Documentation and verification
 
 - Align VERSION and native/Docker/Python examples to 1.4.0; include the new command in Docker publication smoke checks and the three-case upgrade CI matrix.
-- Verify real Laravel 12-to-13 upgrades and code recovery with PostgreSQL/Filament and MySQL/Git through the Python Docker adapter; check queue execution, encrypted-data retention and post-backup writes in a separate PostgreSQL case. Add cached database/key drift refusals and real temporary-container isolation/cleanup checks. Local 195 Bats and 138 Python tests, lint, adapter packaging and Docker CLI source checks pass; publication requires all five CI gates on the exact release commit.
+- Initialize/migrate/seed the E2E database before starting database-backed queue workers; check every fixture role explicitly so slow MySQL startup cannot silently invalidate upgrade preconditions. Keep the application's intentional stopped-worker preservation unchanged.
+- Verify real Laravel 12-to-13 upgrades and code recovery with PostgreSQL/Filament and MySQL/Git through the Python Docker adapter; check queue execution, encrypted-data retention and post-backup writes in a separate PostgreSQL case. Add cached database/key drift refusals and real temporary-container isolation/cleanup checks. Local 195 Bats and 140 Python tests, lint, adapter packaging and Docker CLI source checks pass; publication requires all five CI gates on the exact release commit.
 - Refresh project context, navigation, continuity guidance and ADR-0011 for the supported upgrade contract and verified local evidence.
 
 ## 1.3.3
