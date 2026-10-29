@@ -13,6 +13,7 @@ on:
       - "docker-preflight.py"
       - "kubernetes/**"
       - "lib/**"
+      - "src/**"
       - "versions.env"
       - "VERSION"
       - "CHANGELOG.md"
@@ -31,6 +32,7 @@ on:
       - "docker-preflight.py"
       - "kubernetes/**"
       - "lib/**"
+      - "src/**"
       - "versions.env"
       - "VERSION"
       - "CHANGELOG.md"
@@ -52,6 +54,61 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  e2e-upgrade:
+    name: Managed upgrade (${{ matrix.name }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: PostgreSQL + Filament
+            db: postgres
+            php: "83"
+            filament: "4"
+            repository: ""
+          - name: MySQL + Git + Docker CLI
+            db: mysql
+            php: "82"
+            filament: "4"
+            repository: "--repository"
+          - name: PostgreSQL without Filament
+            db: postgres
+            php: "83"
+            filament: ""
+            repository: ""
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build patched source and target runtimes
+        env:
+          SOURCE_PHP: ${{ matrix.php }}
+        run: |
+          variants=(83)
+          if [ "$SOURCE_PHP" = 82 ]; then variants+=(82); fi
+          for variant in "${variants[@]}"; do
+            docker build -t "laraship-php:upgrade-$variant" -f "laravel/.docker/php/php$variant.Dockerfile" laravel/.docker/php
+          done
+      - name: Build the actual Docker CLI adapter
+        if: matrix.db == 'mysql'
+        run: docker build -t laraship-upgrade-test:1.4.0 .
+      - name: Check private output transport and interrupted command cleanup
+        env:
+          E2E_ALLOW: "1"
+        run: sudo -E python3 -B tests/upgrade-runtime-e2e.py
+      - name: Check planning, preparation, apply, data retention and recovery
+        env:
+          E2E_ALLOW: "1"
+          UPGRADE_DB: ${{ matrix.db }}
+          UPGRADE_SOURCE_PHP: ${{ matrix.php }}
+          UPGRADE_FILAMENT: ${{ matrix.filament }}
+          UPGRADE_REPOSITORY: ${{ matrix.repository }}
+        run: |
+          flags=()
+          if [ -n "$UPGRADE_FILAMENT" ]; then flags+=(--filament "$UPGRADE_FILAMENT"); fi
+          if [ -n "$UPGRADE_REPOSITORY" ]; then flags+=(--repository); fi
+          if [ "$UPGRADE_DB" = mysql ]; then flags+=(--cli-image laraship-upgrade-test:1.4.0); fi
+          sudo -E python3 -B tests/upgrade-e2e.py --db "$UPGRADE_DB" --source-php "$UPGRADE_SOURCE_PHP" "${flags[@]}"
+
   php-images:
     name: PHP ${{ matrix.php }} runtime
     runs-on: ubuntu-24.04

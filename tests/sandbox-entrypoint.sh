@@ -42,7 +42,7 @@ reset_state() {
 run_unit() {
     echo "==> shellcheck"
     # SC2155 (declare and assign separately) is a style issue in remove.sh: known and excluded.
-    (cd "${WORK}" && shellcheck -S warning -e SC2155 deploy-laravel.sh activate.sh deactivate.sh remove.sh list-projects.sh update.sh backup.sh kubernetes.sh docker/*.sh lib/*.sh modules/*.sh laravel/.docker/php/*.sh .github/scripts/*.sh tests/native-db.sh tests/container-e2e.sh tests/kubernetes-e2e.sh)
+    (cd "${WORK}" && shellcheck -S warning -e SC2155 deploy-laravel.sh activate.sh deactivate.sh remove.sh list-projects.sh update.sh upgrade.sh backup.sh kubernetes.sh docker/*.sh lib/*.sh modules/*.sh laravel/.docker/php/*.sh .github/scripts/*.sh tests/native-db.sh tests/container-e2e.sh tests/kubernetes-e2e.sh)
     echo "==> bats: static + validation + presets + safety"
     bats --print-output-on-failure "${WORK}/tests/static.bats" "${WORK}/tests/validation.bats" "${WORK}/tests/presets.bats" "${WORK}/tests/safety.bats" "${WORK}/tests/hardening.bats"
     python3 -m unittest discover -s "$WORK/tests" -p 'test_*.py' -v
@@ -101,8 +101,14 @@ case "${MODE}" in
     e2e-db-migration) E2E_ALLOW=1 bats --print-output-on-failure "${WORK}/tests/e2e-db-migration.bats" ;;
     e2e-repo) run_e2e_repo ;;
     e2e-modules) run_e2e_modules ;;
+    e2e-upgrade)
+        for variant in 82 83; do
+            docker build -t "laraship-php:upgrade-$variant" -f "$WORK/laravel/.docker/php/php$variant.Dockerfile" "$WORK/laravel/.docker/php"
+        done
+        E2E_ALLOW=1 python3 -B "$WORK/tests/upgrade-runtime-e2e.py"
+        E2E_ALLOW=1 python3 -B "$WORK/tests/upgrade-e2e.py" --db "${E2E_DB:-postgres}" --filament 4 ;;
     install) run_install "$@" ;;
     full) bash "$WORK/tests/full-matrix.sh" ;;
     all)  run_unit; run_e2e; E2E_ALLOW=1 bats --print-output-on-failure "${WORK}/tests/e2e-proxy.bats" "${WORK}/tests/e2e-db-migration.bats"; run_e2e_repo; run_e2e_modules ;;
-    *)    echo "mode: unit | container | kubernetes | e2e | e2e-proxy | e2e-db-migration | e2e-repo | e2e-modules | install [CASE...] | all | full" >&2; exit 2 ;;
+    *)    echo "mode: unit | container | kubernetes | e2e | e2e-proxy | e2e-db-migration | e2e-repo | e2e-modules | e2e-upgrade | install [CASE...] | all | full" >&2; exit 2 ;;
 esac

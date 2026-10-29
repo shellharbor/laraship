@@ -8,7 +8,7 @@ case "$COMMAND" in
         cat <<'HELP'
 LaraShip: native Bash tools, packaged with their dependencies.
   deploy [arguments]                 deploy-laravel.sh
-  update|backup|activate|deactivate|remove|list [arguments]
+  update|upgrade|backup|activate|deactivate|remove|list [arguments]
   kubernetes render|deploy [arguments]  immutable application backend
   --version
 Compose operations require the Linux server's Docker socket, host network,
@@ -19,8 +19,8 @@ HELP
     kubernetes) exec python3 "$ROOT/kubernetes/laraship.py" "$@" ;;
     deploy|deploy-laravel.sh) SCRIPT=deploy-laravel.sh ;;
     list|list-projects.sh) SCRIPT=list-projects.sh ;;
-    update|backup|activate|deactivate|remove) SCRIPT="$COMMAND.sh" ;;
-    update.sh|backup.sh|activate.sh|deactivate.sh|remove.sh) SCRIPT="$COMMAND" ;;
+    update|upgrade|backup|activate|deactivate|remove) SCRIPT="$COMMAND.sh" ;;
+    update.sh|upgrade.sh|backup.sh|activate.sh|deactivate.sh|remove.sh) SCRIPT="$COMMAND" ;;
     *) echo "Unknown LaraShip command: $COMMAND" >&2; exit 2 ;;
 esac
 # Supported informational commands do not need Docker or host mounts.
@@ -31,7 +31,18 @@ for ARG in "$@"; do
         fi ;;
     esac
 done
-python3 "$ROOT/docker-preflight.py" || {
+PREFLIGHT=()
+if [[ "$SCRIPT" == upgrade.sh ]]; then
+    if [[ $# -eq 1 && ( "$1" == --help || "$1" == -h || "$1" == --version ) ]]; then
+        exec bash "$ROOT/$SCRIPT" "$@"
+    fi
+    PREVIEW=true
+    for ARG in "$@"; do
+        case "${ARG%%=*}" in --prepare|--verify|--apply|--recover) PREVIEW=false ;; esac
+    done
+    [[ "$PREVIEW" != true ]] || PREFLIGHT+=(--preview)
+fi
+python3 "$ROOT/docker-preflight.py" "${PREFLIGHT[@]}" || {
     echo "Container Compose preflight failed. Mount the Linux server's /var/www, /run/lock/laraship and Docker socket at identical paths, and use --network host. See docs/CONTAINERS.md." >&2
     exit 1
 }

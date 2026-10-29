@@ -353,6 +353,28 @@ class CLITests(unittest.TestCase):
             command = cli.docker_command(args, ["--slug", "fixture", "restore", "dump.sql.gz"])
         self.assertIn("--tty", command)
 
+    def test_upgrade_preview_uses_readonly_server_bindings_and_creates_no_directories(self):
+        with patch.object(cli, "require_linux"), patch.object(cli.os, "geteuid", return_value=0, create=True), \
+                patch.dict(cli.os.environ, {}, clear=True), patch.object(cli.Path, "is_symlink", return_value=False), \
+                patch.object(cli.Path, "exists", return_value=True), patch.object(cli.Path, "mkdir") as mkdir, \
+                patch.object(cli, "require_docker"), patch.object(cli, "execute", return_value=0) as execute:
+            self.assertEqual(self.call(['upgrade', '--backend', 'docker', '--', '--slug', 'fixture', '--json'])[0], 0)
+        command = execute.call_args.args[0]
+        for path in ('/var/www', '/var/run/docker.sock'):
+            self.assertIn(f'type=bind,src={path},dst={path},readonly', command)
+        self.assertIn('--read-only', command)
+        self.assertIn('host', command)
+        self.assertFalse(any('/run/lock/laraship' in item or '/var/backups/laraship' in item for item in command))
+        mkdir.assert_not_called()
+        self.assertFalse(cli.informational('upgrade', ['--dry-run']))
+        for value in ('--prepare', '--apply=/var/www/fixture/plan.json', '--recover', '--verify'):
+            self.assertFalse(cli.upgrade_preview('upgrade', [value]))
+
+    def test_upgrade_native_dispatch_and_static_docker_help(self):
+        self.assertEqual(cli.COMMANDS['upgrade'], 'upgrade.sh')
+        for value in ('--help', '-h', '--version'):
+            self.assertTrue(cli.informational('upgrade', [value]))
+
 
 if __name__ == "__main__":
     unittest.main()

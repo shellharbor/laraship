@@ -28,6 +28,37 @@ After every task with file changes, briefly record what changed and why: feature
 - 2026-10-04: translated all AI-KIT documents, adapters, rules, templates, and the bootstrap prompt into English; established English as the language for future kit updates.
 - 2026-10-04: extended the English language requirement to all authored project content and agent communication, including code, UI text, logs, Git messages, reviews, and reports, so future project work follows one language policy.
 
+## 1.4.0
+
+LaraShip 1.4.0 adds managed Laravel, PHP and Filament upgrades through the same native Bash, Docker and Python interfaces. Prepare and test changes separately, review the candidate, then apply it after a validated database backup.
+
+### Added
+
+- Add a separate managed `upgrade` command for Compose Laravel 12/13, reviewed PHP 8.2/8.3 and existing Filament 4/5 projects, with a bounded compatibility matrix, read-only plans, isolated candidate preparation/tests and exact-candidate application.
+- Require maintenance and a private validated PostgreSQL/MySQL dump before switching application code; preserve runtime data and apply the prepared PHP image across FPM/CLI/workers. Journal recovery retains patched PHP and requires explicit database review after migrations may have started.
+- Require a reviewed exact upstream commit for Git applications; expose the same engine through native Bash, Docker and Python, including read-only Docker planning mounts. Preserve existing `update.sh` behavior.
+- Keep immutable prepared PHP image IDs during project activation instead of attempting to rebuild them as Docker tags.
+- Document all upgrade arguments, preparation/review/recovery procedures and adapter examples; add policy/lifecycle/privacy regressions and real Docker upgrade/data-retention coverage to E2E CI.
+
+### Safety and recovery
+
+- Refuse cached/fresh database or encryption configuration drift before preparation and backup. Clear generated bootstrap caches before booting switched/recovered code, including providers from removed development dependencies.
+- Keep candidate build/test containers non-root, resource bounded and isolated from production environment files, databases and the Docker socket. Disable retained command-container logs and restrict interrupted-command cleanup to operation owner plus command-role labels.
+- Retain generated frontend/Filament assets, application keys, uploads, stopped-worker state and post-backup writes through explicit code recovery. Database restoration remains a separate operator action.
+
+### Upgrade notes
+
+- Supported first-release scope: standard Compose Laravel 12/13, reviewed patched PHP 8.2/8.3 templates and installed Filament 4/5. Default target is the latest reviewed supported Laravel branch, currently 13; `--laravel-version X.Y[.Z]` selects a stable target explicitly. Application tests are mandatory; major application/plugin changes can require manual migration.
+- Install matching 1.4.0 toolkit, Docker image or Python adapter. Updating pip/pipx alone does not replace an existing native toolkit or application PHP image. Keep the same toolkit revision throughout a saved upgrade plan.
+- Run `upgrade --slug shop --json` to inspect without changing the project. Git apply requires the exact tested fast-forward upstream commit. After migrations may have started, code recovery retains maintenance until explicit `--database-verified`; no automatic database rollback occurs.
+- Read [the full upgrade guide](docs/UPGRADE.md) for every argument, private candidate review, backups and recovery. Existing Compose volumes and Kubernetes rollout procedures remain unchanged.
+
+### Documentation and verification
+
+- Align VERSION and native/Docker/Python examples to 1.4.0; include the new command in Docker publication smoke checks and the three-case upgrade CI matrix.
+- Verify real Laravel 12-to-13 upgrades and code recovery with PostgreSQL/Filament and MySQL/Git through the Python Docker adapter; check queue execution, encrypted-data retention and post-backup writes in a separate PostgreSQL case. Add cached database/key drift refusals and real temporary-container isolation/cleanup checks. Local 195 Bats and 138 Python tests, lint, adapter packaging and Docker CLI source checks pass; publication requires all five CI gates on the exact release commit.
+- Refresh project context, navigation, continuity guidance and ADR-0011 for the supported upgrade contract and verified local evidence.
+
 ## 1.3.3
 
 LaraShip 1.3.3 enforces patched PHP runtimes after CVE-2026-109618 and CVE-2026-109619 across Compose and Kubernetes deployment paths. It also prevents retired Laravel versions from bypassing the existing security minimum through configuration or unlocked repositories.

@@ -3,6 +3,33 @@
 load helpers
 setup() { export HARDEN_WORK="$BATS_TEST_TMPDIR/hardening"; mkdir -p "$HARDEN_WORK"; }
 
+@test "activation retains immutable managed upgrade images without trying to build their IDs as tags" {
+    local mode
+    for mode in regular managed; do
+        mkdir -p "$HARDEN_WORK/$mode"
+        if [[ "$mode" == managed ]]; then
+            python3 - "$HARDEN_WORK/$mode/docker-compose.override.yml" <<'PY'
+import json
+from pathlib import Path
+import sys
+Path(sys.argv[1]).write_text(json.dumps({'x-laraship-upgrade': {'id': 'a' * 32}, 'services': {'php': {'image': 'sha256:' + 'b' * 64}}}))
+PY
+        fi
+        run bash -c '
+            source "$1/activate.sh"
+            PROJECT_DIR="$HARDEN_WORK/$2"; SLUG=fixture
+            docker() { printf "%s\n" "$*" > "$PROJECT_DIR/arguments"; }
+            start_project_containers
+        ' _ "$REPO_ROOT" "$mode"
+        [ "$status" = 0 ]
+        if [[ "$mode" == managed ]]; then
+            grep -qx 'compose up -d --no-build --pull never' "$HARDEN_WORK/$mode/arguments"
+        else
+            grep -qx 'compose up -d --build' "$HARDEN_WORK/$mode/arguments"
+        fi
+    done
+}
+
 @test "Compose security checks use actual PHP, bounded nonterminal input and propagate refusal" {
     mkdir -p "$HARDEN_WORK/bin" "$HARDEN_WORK/project"
     cat > "$HARDEN_WORK/bin/docker" <<'DOCKER'

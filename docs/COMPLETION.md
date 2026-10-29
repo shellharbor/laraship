@@ -2,7 +2,7 @@
 
 Run a local executable, POST a JSON report to an API, or do both when a deployment succeeds, fails or handles cancellation. Completion runs after the final deployment step, including ZIP creation and deferred post-deploy errors. Callback failures do not change the deployment's original exit status.
 
-This feature belongs to the deployment Bash engine. Native Bash, Docker and the Python CLI share it when the selected toolkit/image includes the feature. It does not add hooks to update, backup, activation, removal or the Kubernetes backend. Published images and copied toolkits do not acquire new flags automatically.
+This feature belongs to the deployment Bash engine. Native Bash, Docker and the Python CLI share it when the selected toolkit/image includes the feature. It does not add hooks to update, managed upgrade, backup, activation, removal or the Kubernetes backend. Published images and copied toolkits do not acquire new flags automatically.
 
 ## Options
 
@@ -66,12 +66,12 @@ Only the owner process finalizes; subshell exits do not send extra reports. HUP/
 
 ## Docker and Python CLI
 
-A Docker hook runs inside the administrative CLI container with its available tools. Mount hook/token files read-only at the same absolute paths, with the required Linux ownership/permissions. Completion support starts with release 1.3.0; the examples use image 1.3.3:
+A Docker hook runs inside the administrative CLI container with its available tools. Mount hook/token files read-only at the same absolute paths, with the required Linux ownership/permissions. Completion support starts with release 1.3.0; the examples use image 1.4.0:
 
 ```bash
-laraship install --backend docker --version 1.3.3
+laraship install --backend docker --version 1.4.0
 LARASHIP_CLI="$(command -v laraship)"
-sudo "$LARASHIP_CLI" deploy --backend docker --image shellharbor/laraship:1.3.3 \
+sudo "$LARASHIP_CLI" deploy --backend docker --image shellharbor/laraship:1.4.0 \
   --mount-readonly /opt/laraship-hooks -- \
   --slug shop --domain shop.example.com --db-type postgres \
   --ssl-email admin@example.com \

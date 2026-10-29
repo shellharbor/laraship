@@ -13,7 +13,7 @@ from urllib.error import URLError
 from . import DEFAULT_RELEASE, __version__
 from .install import absolute_path, install_native, installation_path, release_version
 
-COMMANDS = {"deploy": "deploy-laravel.sh", "update": "update.sh", "backup": "backup.sh",
+COMMANDS = {"deploy": "deploy-laravel.sh", "update": "update.sh", "upgrade": "upgrade.sh", "backup": "backup.sh",
             "activate": "activate.sh", "deactivate": "deactivate.sh", "remove": "remove.sh",
             "list": "list-projects.sh", "toolkit-version": "deploy-laravel.sh"}
 SERVER_PATHS = ("/var/www", "/run/lock/laraship", "/var/run/docker.sock")
@@ -75,8 +75,15 @@ def require_docker(local: bool = False) -> None:
 def informational(command: str, arguments: list[str]) -> bool:
     if command == "toolkit-version" or arguments == ["--help"]:
         return True
+    if command == "upgrade" and arguments in (["-h"], ["--version"]):
+        return True
     return command == "deploy" and bool(arguments) and arguments[0] in (
         "--dry-run", "--help", "-h", "--version", "-V", "--list-modules", "--list-presets")
+
+
+def upgrade_preview(command: str, arguments: list[str]) -> bool:
+    return command == "upgrade" and not any(
+        value.split("=", 1)[0] in ("--prepare", "--verify", "--apply", "--recover") for value in arguments)
 
 
 def docker_command(args: argparse.Namespace, arguments: list[str]) -> list[str]:
@@ -93,7 +100,8 @@ def docker_command(args: argparse.Namespace, arguments: list[str]) -> list[str]:
         if os.environ.get("DOCKER_CONTEXT"):
             raise ValueError("Unset DOCKER_CONTEXT; server operations require the local Docker daemon")
         archive = absolute_path(args.archive_dir)
-        paths = (*SERVER_PATHS, str(archive))
+        preview = upgrade_preview(args.command, arguments)
+        paths = ("/var/www", "/var/run/docker.sock") if preview else (*SERVER_PATHS, str(archive))
         protected_archives = (*SERVER_PATHS, "/opt/laraship", "/usr", "/bin", "/etc")
         if any(archive == Path(p) or archive in Path(p).parents or Path(p) in archive.parents
                for p in protected_archives):
@@ -110,9 +118,13 @@ def docker_command(args: argparse.Namespace, arguments: list[str]) -> list[str]:
         command += ["--interactive"]
         if sys.stdin.isatty() and sys.stdout.isatty():
             command += ["--tty"]
-        command += ["--network", "host", "--env", f"LARASHIP_ARCHIVE_DIR={archive}"]
+        command += ["--network", "host"]
+        if preview:
+            command += ["--read-only", "--tmpfs", "/tmp"]
+        else:
+            command += ["--env", f"LARASHIP_ARCHIVE_DIR={archive}"]
         for value in paths:
-            command += ["--mount", f"type=bind,src={value},dst={value}"]
+            command += ["--mount", f"type=bind,src={value},dst={value}" + (",readonly" if preview else "")]
     if args.mount_readonly:
         require_linux()
         protected = (*SERVER_PATHS, str(absolute_path(args.archive_dir)), "/opt/laraship", "/usr", "/bin", "/etc")
@@ -179,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
             command = docker_command(args, arguments)
             inspect_only = informational(args.command, arguments)
             require_docker(local=not inspect_only)
-            if not inspect_only:
+            if not inspect_only and not upgrade_preview(args.command, arguments):
                 # All arguments, mounts and the local daemon were checked before writes.
                 for value in ("/var/www", "/run/lock/laraship", args.archive_dir):
                     absolute_path(value).mkdir(parents=True, exist_ok=True)

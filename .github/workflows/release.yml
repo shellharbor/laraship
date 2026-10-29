@@ -202,6 +202,8 @@ jobs:
         run: |
           test "$(docker run --rm --network none --read-only --tmpfs /tmp laraship:release-smoke --version)" = "deploy-laravel.sh $RELEASE_VERSION"
           docker run --rm --network none --read-only --tmpfs /tmp laraship:release-smoke --help
+          docker run --rm --user 1000:1000 --network none --read-only --tmpfs /tmp laraship:release-smoke upgrade --help
+          test "$(docker run --rm --network none --read-only --tmpfs /tmp laraship:release-smoke upgrade --version)" = "LaraShip upgrade $RELEASE_VERSION"
           docker run --rm --network none --read-only --tmpfs /tmp laraship:release-smoke deploy --dry-run --domain smoke.example.test --db-type postgres --no-ssl
           docker run --rm --user 1000:1000 --network none --read-only --tmpfs /tmp laraship:release-smoke kubernetes render \
             --name smoke --namespace smoke --image example/app:1.0.0 \

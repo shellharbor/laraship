@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 
-def main() -> int:
+def main(preview: bool = False) -> int:
     if os.geteuid() != 0:
         raise ValueError("Compose operations require root")
     if os.environ.get("DOCKER_HOST", "unix:///var/run/docker.sock") != "unix:///var/run/docker.sock":
@@ -26,10 +26,13 @@ def main() -> int:
     if container["HostConfig"]["NetworkMode"] != "host":
         raise ValueError("Host networking is required for server port and HTTP checks")
     mounts = {item["Destination"]: item for item in container["Mounts"]}
-    for path in ("/var/www", "/run/lock/laraship", "/var/run/docker.sock"):
+    required = ("/var/www", "/var/run/docker.sock") if preview else ("/var/www", "/run/lock/laraship", "/var/run/docker.sock")
+    for path in required:
         item = mounts.get(path, {})
-        if item.get("Type") != "bind" or item.get("Source") != path or not item.get("RW"):
-            raise ValueError(f"Required writable, identical host bind: {path}")
+        if item.get("Type") != "bind" or item.get("Source") != path or bool(item.get("RW")) == preview:
+            raise ValueError(f"Required {'read-only' if preview else 'writable'}, identical host bind: {path}")
+    if preview:
+        return 0
     archive_path = os.environ.get("LARASHIP_ARCHIVE_DIR", "/var/backups/laraship")
     output = mounts.get(archive_path, {})
     if output.get("Type") != "bind" or output.get("Source") != archive_path or not output.get("RW"):
@@ -39,7 +42,9 @@ def main() -> int:
 
 if __name__ == "__main__":
     try:
-        sys.exit(main())
+        if sys.argv[1:] not in ([], ["--preview"]):
+            raise ValueError("Unsupported preflight arguments")
+        sys.exit(main(sys.argv[1:] == ["--preview"]))
     except (ValueError, KeyError, OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
         print(f"Container preflight: {exc}", file=sys.stderr)
         sys.exit(1)

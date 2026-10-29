@@ -13,10 +13,10 @@ SPEC.loader.exec_module(preflight)
 
 
 class ContainerRunnerTests(unittest.TestCase):
-    def run_preflight(self, container):
+    def run_preflight(self, container, preview=False):
         response = subprocess.CompletedProcess([], 0, json.dumps([container]))
         with patch.object(preflight.os, "geteuid", return_value=0, create=True), patch.object(preflight.Path, "read_text", return_value=f"/var/lib/docker/containers/{'a' * 64}/hostname /etc/hostname"), patch.dict(preflight.os.environ, {}, clear=True), patch.object(preflight.subprocess, "run", return_value=response):
-            return preflight.main()
+            return preflight.main(preview)
 
     def container(self):
         return {"HostConfig": {"NetworkMode": "host"}, "Mounts": [
@@ -43,6 +43,17 @@ class ContainerRunnerTests(unittest.TestCase):
         container["HostConfig"]["NetworkMode"] = "bridge"
         with self.assertRaises(ValueError):
             self.run_preflight(container)
+
+    def test_upgrade_preview_requires_readonly_project_and_socket_without_locks_or_archive(self):
+        container = self.container()
+        container['Mounts'] = [item for item in container['Mounts']
+                               if item['Destination'] in ('/var/www', '/var/run/docker.sock')]
+        for item in container['Mounts']:
+            item['RW'] = False
+        self.assertEqual(self.run_preflight(container, preview=True), 0)
+        container['Mounts'][0]['RW'] = True
+        with self.assertRaisesRegex(ValueError, 'read-only'):
+            self.run_preflight(container, preview=True)
 
 
 if __name__ == "__main__":

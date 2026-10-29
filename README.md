@@ -22,13 +22,15 @@
 
 The `laraship` folder is self-contained: it holds the deploy script, templates, management utilities, examples and a skill for Claude Code. Copy it to the server as a whole (for example, to `/opt/laraship/`) and run the scripts **on the server as root**. From your workstation (for example, Windows) connect to the server over SSH.
 
-LaraShip also has a **CLI Docker image**, [`shellharbor/laraship:1.3.3`](https://hub.docker.com/r/shellharbor/laraship), with the same Bash tools and their dependencies, plus a separate **Kubernetes backend** for existing applications built into immutable images. Native Bash remains supported. See [published-image examples](#run-from-docker-hub), [Docker runner](docs/CONTAINERS.md) and [Kubernetes deployment, image contract and scope](docs/KUBERNETES.md). Existing Compose projects and database volumes are not converted automatically.
+LaraShip also has a **CLI Docker image**, [`shellharbor/laraship:1.4.0`](https://hub.docker.com/r/shellharbor/laraship), with the same Bash tools and their dependencies, plus a separate **Kubernetes backend** for existing applications built into immutable images. Native Bash remains supported. See [published-image examples](#run-from-docker-hub), [Docker runner](docs/CONTAINERS.md) and [Kubernetes deployment, image contract and scope](docs/KUBERNETES.md). Existing Compose projects and database volumes are not converted automatically.
 
 The **[Python CLI](docs/PYTHON.md)** adds installation through pip or pipx and a `laraship` command for the native and Docker backends. It downloads verified toolkit releases or runs the published CLI image. Release 1.3.0 adds PyPI packaging; a reviewed checkout can also be installed with `pipx install .`.
 
-For the complete option catalog, config keys, dependencies, lifecycle commands and command-builder integration context, see the **[CLI reference](docs/CLI_REFERENCE.md)**. It also includes temporary Docker runner and one-off Docker Compose service examples for `shellharbor/laraship:1.3.3`.
+For the complete option catalog, config keys, dependencies, lifecycle commands and command-builder integration context, see the **[CLI reference](docs/CLI_REFERENCE.md)**. It also includes temporary Docker runner and one-off Docker Compose service examples for `shellharbor/laraship:1.4.0`.
 
 The default PostgreSQL image remains 17. See the **[PostgreSQL 18 verification report](docs/POSTGRES18.md)** for tested scenarios, the data-directory contract and migration limits.
+
+**[Managed Laravel upgrades](docs/UPGRADE.md)** add `upgrade.sh` / `laraship upgrade`: read-only planning, private preparation/tests, reviewed Laravel/PHP/Filament changes, backup before apply and explicit recovery. Standard Compose Laravel 12/13 and Filament 4/5 paths are supported. Use toolkit, image and Python adapter 1.4.0 or newer. Existing `update.sh` keeps its Git update behavior.
 
 ---
 
@@ -82,6 +84,7 @@ laraship/
 ├── remove.sh                      # remove a project completely
 ├── list-projects.sh               # list projects on the server
 ├── update.sh                      # update a project deployed with --repo
+├── upgrade.sh                     # plan, prepare, apply and recover Laravel/PHP/Filament upgrades
 ├── backup.sh                      # database dumps of a project deployed with --with backup: now, list, restore
 ├── laravel/                       # project template → /var/www/<slug>
 │   ├── docker-compose.yml
@@ -188,13 +191,13 @@ The `artisan`, `composer`, `npm` and `permissions` utilities have no profile. Be
 Python 3.10+ is required. Install the release's isolated CLI with pipx:
 
 ```bash
-pipx install laraship==1.3.3
+pipx install laraship==1.4.0
 laraship --help
-laraship install --backend native --version 1.3.3 --dry-run
-laraship install --backend docker --version 1.3.3 --dry-run
+laraship install --backend native --version 1.4.0 --dry-run
+laraship install --backend docker --version 1.4.0 --dry-run
 ```
 
-Alternatively, use `python -m pip install laraship==1.3.3` inside a virtual environment. Before publication, or to review a source checkout, use `pipx install .`. The Python package has no runtime dependencies and only installs its CLI; installation/deployment are explicit commands. Server operations retain their Ubuntu/Linux, root and Docker requirements. See the [Python guide](docs/PYTHON.md) for actual installation, argument forwarding, Docker mounts, updates and PyPI Trusted Publishing setup.
+Alternatively, use `python -m pip install laraship==1.4.0` inside a virtual environment. Before publication, or to review a source checkout, use `pipx install .`. The Python package has no runtime dependencies and only installs its CLI; installation/deployment are explicit commands. Server operations retain their Ubuntu/Linux, root and Docker requirements. See the [Python guide](docs/PYTHON.md) for actual installation, argument forwarding, Docker mounts, updates and PyPI Trusted Publishing setup.
 
 ## Quick start
 
@@ -218,7 +221,7 @@ You can also put the folder into a separate git repository and run `git clone` o
 **Or install a release.** Every release is published on GitHub as a tarball with a SHA-256 checksum:
 
 ```bash
-VERSION=1.3.3
+VERSION=1.4.0
 curl -fsSLO https://github.com/shellharbor/laraship/releases/download/v${VERSION}/laraship-${VERSION}.tar.gz
 curl -fsSLO https://github.com/shellharbor/laraship/releases/download/v${VERSION}/laraship-${VERSION}.tar.gz.sha256
 sha256sum -c laraship-${VERSION}.tar.gz.sha256
@@ -260,15 +263,15 @@ bash /opt/laraship/deploy-laravel.sh --help
 
 ## Run from Docker Hub
 
-The release image `shellharbor/laraship:1.3.3` targets `linux/amd64`. Docker Engine must already be installed and running. The image packages the toolkit and its dependencies, so downloading the source folder is optional for this runner.
+The release image `shellharbor/laraship:1.4.0` targets `linux/amd64`. Docker Engine must already be installed and running. The image packages the toolkit and its dependencies, so downloading the source folder is optional for this runner.
 
 ### Pull, inspect and preview
 
 ```bash
-docker pull shellharbor/laraship:1.3.3
-docker run --rm shellharbor/laraship:1.3.3 --version
-docker run --rm shellharbor/laraship:1.3.3 --help
-docker run --rm shellharbor/laraship:1.3.3 deploy --dry-run \
+docker pull shellharbor/laraship:1.4.0
+docker run --rm shellharbor/laraship:1.4.0 --version
+docker run --rm shellharbor/laraship:1.4.0 --help
+docker run --rm shellharbor/laraship:1.4.0 deploy --dry-run \
   --slug shop --domain shop.example.com --db-type postgres --no-ssl
 ```
 
@@ -288,7 +291,7 @@ laraship_docker() {
     --mount type=bind,src=/var/www,dst=/var/www \
     --mount type=bind,src=/run/lock/laraship,dst=/run/lock/laraship \
     --mount type=bind,src=/var/backups/laraship,dst=/var/backups/laraship \
-    shellharbor/laraship:1.3.3 "$@"
+    shellharbor/laraship:1.4.0 "$@"
 }
 ```
 
@@ -319,7 +322,7 @@ The same image can render manifests as your current user with a read-only root f
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" --read-only --tmpfs /tmp \
-  shellharbor/laraship:1.3.3 kubernetes render \
+  shellharbor/laraship:1.4.0 kubernetes render \
   --name shop --namespace shop --image registry.example.com/shop:1.0.0 \
   --configmap shop-config-v1 --secret shop-secret-v1 --revision v1 \
   > shop.k8s.yaml
@@ -1669,13 +1672,13 @@ The E2E workflow has two more jobs, `e2e-repo` (for `--repo` and `update.sh`) an
 
 The badges at the top of the file point to the `shellharbor/laraship` repository; if you rename or fork it, update the paths in all badge links.
 
-Release publication requires completed successful `lint.yml`, `tests.yml`, `e2e.yml`, `codeql.yml` and `kubernetes.yml` main/master push runs for the exact tagged commit. Missing, failed or running checks block publication; an earlier green commit is insufficient. The release version is **1.3.3**; see its [changes and publication notes](CHANGELOG.md#133). Unassigned changes remain under Unreleased.
+Release publication requires completed successful `lint.yml`, `tests.yml`, `e2e.yml`, `codeql.yml` and `kubernetes.yml` main/master push runs for the exact tagged commit. Missing, failed or running checks block publication; an earlier green commit is insufficient. The release version is **1.4.0**; see its [changes and publication notes](CHANGELOG.md#140). Unassigned changes remain under Unreleased.
 
 Prepare releases in this order:
 
 1. Set `VERSION` to the intended version and add the matching numeric section in `CHANGELOG.md`. Commit these files together with the release changes.
 2. Push that commit to main/master and wait for all five required workflows to finish successfully for that exact SHA.
-3. Create and push the matching tag, such as `v1.3.3`, pointing to that verified commit. The native CLI version, archive and Docker Hub image derive from its committed `VERSION` file.
+3. Create and push the matching tag, such as `v1.4.0`, pointing to that verified commit. The native CLI version, archive and Docker Hub image derive from its committed `VERSION` file.
 
 Release 1.3.0 introduces Python packaging and deployment completion hooks. Older tags do not contain these features; never move an existing tag to include later changes.
 

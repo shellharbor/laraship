@@ -9,6 +9,7 @@
 #   bash tests/run-local.sh e2e-db-migration # legacy dumps into Docker Official Images
 #   bash tests/run-local.sh e2e-repo   # deploy an existing app with --repo, then update.sh
 #   bash tests/run-local.sh e2e-modules # --with filament,horizon
+#   bash tests/run-local.sh e2e-upgrade # managed Laravel/PHP/Filament upgrade and recovery
 #   E2E_DB=mysql E2E_FILAMENT=0 bash tests/run-local.sh e2e
 #   E2E_DB=mysql bash tests/run-local.sh e2e-db-migration
 #   bash tests/run-local.sh install                     # the install matrix: every case (long)
@@ -30,8 +31,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export MSYS_NO_PATHCONV=1
 MOUNT="${ROOT}"
 EXTRA_DOCKER_ARGS=()
-if [[ "$MODE" == kubernetes ]]; then
-    # Nested systemd needs the real cgroup hierarchy; no host Docker socket is mounted.
+if [[ "$MODE" == kubernetes || "$MODE" == e2e-upgrade ]]; then
+    # Nested systemd and resource-limited upgrade containers need the real hierarchy.
+    # No host Docker socket is mounted.
     EXTRA_DOCKER_ARGS+=(--cgroupns=host)
 fi
 if command -v cygpath >/dev/null 2>&1; then

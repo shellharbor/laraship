@@ -7,7 +7,7 @@
 #   sudo bash activate.sh --slug cp
 #
 # What the script does:
-#   1. Starts the project containers (docker compose up -d --build)
+#   1. Starts the project containers (retaining prepared runtimes after managed upgrades)
 #   2. Restores the site config: nginxproxy/sites/<slug>.conf.disabled → <slug>.conf
 #   3. Uncomments the slug entries in nginxproxy/docker-compose.yml
 #   4. Restarts the project's php (if present) and nginx containers
@@ -69,8 +69,26 @@ parse_args() {
 start_project_containers() {
     info "Starting containers of project ${SLUG}..."
     cd "${PROJECT_DIR}" || error "Failed to change directory to ${PROJECT_DIR}"
-    
-    if docker compose up -d --build; then
+    local START_ARGS=(up -d --build)
+    # Prepared runtimes are immutable image IDs, which cannot be Docker build tags.
+    if python3 - "${PROJECT_DIR}/docker-compose.override.yml" <<'PY'
+import json
+from pathlib import Path
+import re
+import sys
+try:
+    value = json.loads(Path(sys.argv[1]).read_text())
+    marker = value.get('x-laraship-upgrade', {})
+    valid = re.fullmatch(r'[a-f0-9]{32}', marker.get('id', '')) and value.get('services')
+    valid = valid and all(re.fullmatch(r'sha256:[a-f0-9]{64}', item.get('image', '')) for item in value['services'].values())
+    sys.exit(0 if valid else 1)
+except (OSError, ValueError, TypeError, AttributeError):
+    sys.exit(1)
+PY
+    then
+        START_ARGS=(up -d --no-build --pull never)
+    fi
+    if docker compose "${START_ARGS[@]}"; then
         info "Containers of project ${SLUG} started"
     else
         error "Cannot start the project containers; shared proxy unchanged"
@@ -265,7 +283,7 @@ print_summary() {
     echo "  Status:         ACTIVATED"
     echo ""
     echo "What was done:"
-    echo "  ✓ Project containers started (docker compose up -d --build)"
+    echo "  ✓ Project containers started"
     echo "  ✓ nginxproxy/sites/${SLUG}.conf config enabled"
     echo "  ✓ Entries uncommented in nginxproxy/docker-compose.yml"
     echo "  ✓ Project php (if present) and nginx containers restarted"

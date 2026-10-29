@@ -1,8 +1,10 @@
 # LaraShip CLI reference and configurator contract
 
-Verified against repository `VERSION=1.3.3` on 2026-10-28. This is a complete reference to the public deployment, management, Python-adapter and Kubernetes arguments in that source version, intended as implementation context for the [LaraShip command builder](https://shellharbor.github.io/laraship-docs/#configure). It describes actual parser behavior, including compatibility flags and limitations that are easy to miss in short help output. Future releases may change the contract; version the configurator's option catalog with the toolkit it targets.
+Verified against repository `VERSION=1.4.0` on 2026-10-29. This is a complete reference to the public deployment, management, Python-adapter and Kubernetes arguments in that source version, intended as implementation context for the [LaraShip command builder](https://shellharbor.github.io/laraship-docs/#configure). It describes actual parser behavior, including compatibility flags and limitations that are easy to miss in short help output. Future releases may change the contract; version the configurator's option catalog with the toolkit it targets.
 
 All examples are Bash commands for the target Linux server. `shop.example.com`, addresses and paths are examples, not credentials. Installations and management operations require the documented server permissions; the website only constructs commands. Internal helper function arguments and test-harness controls are not public deployment options.
+
+Release 1.4.0 includes [managed upgrades](UPGRADE.md). The command/aliases require matching toolkit, adapter and image versions; older published packages/images do not gain the backend command automatically.
 
 ## Contents
 
@@ -28,6 +30,7 @@ LaraShip has two deployment models: the original Linux/Compose provisioner and a
 |---|---|---|---|
 | Deploy a new Compose project | `bash deploy-laravel.sh ARGS` | `deploy ARGS` | `laraship deploy ADAPTER_ARGS -- ARGS` |
 | Update a Git-backed project | `bash update.sh ARGS` | `update ARGS` | `laraship update ADAPTER_ARGS -- ARGS` |
+| Managed Laravel/PHP/Filament upgrade | `bash upgrade.sh ARGS` | `upgrade ARGS` | `laraship upgrade ADAPTER_ARGS -- ARGS` |
 | Database dump/list/restore | `bash backup.sh ARGS` | `backup ARGS` | `laraship backup ADAPTER_ARGS -- ARGS` |
 | Activate a project | `bash activate.sh ARGS` | `activate ARGS` | `laraship activate ADAPTER_ARGS -- ARGS` |
 | Deactivate a project | `bash deactivate.sh ARGS` | `deactivate ARGS` | `laraship deactivate ADAPTER_ARGS -- ARGS` |
@@ -35,10 +38,10 @@ LaraShip has two deployment models: the original Linux/Compose provisioner and a
 | List projects | `bash list-projects.sh` | `list` | `laraship list ADAPTER_ARGS` |
 | Toolkit version | `bash deploy-laravel.sh --version` | `--version` or `-V` | `laraship toolkit-version ADAPTER_ARGS` |
 | Adapter/package version | Not applicable | Not applicable | `laraship --version` |
-| Install toolkit/pull CLI image | Download the release toolkit | `docker pull shellharbor/laraship:1.3.3` on the host | `laraship install INSTALL_ARGS` |
-| Render/deploy Kubernetes resources | `bash kubernetes.sh render\|deploy ARGS` | `kubernetes render\|deploy ARGS` | No Kubernetes subcommand in Python CLI 1.3.3 |
+| Install toolkit/pull CLI image | Download the release toolkit | `docker pull shellharbor/laraship:1.4.0` on the host | `laraship install INSTALL_ARGS` |
+| Render/deploy Kubernetes resources | `bash kubernetes.sh render\|deploy ARGS` | `kubernetes render\|deploy ARGS` | No Kubernetes subcommand in Python CLI 1.4.0 |
 
-Docker also accepts these script-name aliases: `deploy-laravel.sh`, `update.sh`, `backup.sh`, `activate.sh`, `deactivate.sh`, `remove.sh`, `list-projects.sh`. Its top-level help accepts `--help`, `-h`, or `help`; an omitted command shows help. An unknown Docker command exits with code 2. Python does not expose these script-name aliases.
+Docker also accepts these script-name aliases: `deploy-laravel.sh`, `update.sh`, `backup.sh`, `activate.sh`, `deactivate.sh`, `remove.sh`, `list-projects.sh`, plus `upgrade.sh`. Its top-level help accepts `--help`, `-h`, or `help`; an omitted command shows help. An unknown Docker command exits with code 2. Python does not expose these script-name aliases.
 
 Full native provisioning targets Ubuntu/Linux. A Windows/macOS workstation can construct commands and connect by SSH; Docker Desktop is not a supported substitute for the Linux host-bind/host-network Compose deployment contract. The independently portable Kubernetes application image has a different runtime contract.
 
@@ -315,6 +318,8 @@ Management does not consume the deployment config/preset file. All project opera
 
 ### `update.sh`
 
+For framework/PHP/Filament version changes use the separate [`upgrade.sh` contract and full argument catalog](UPGRADE.md#every-argument). It provides default/`--dry-run` planning, `--prepare`, `--verify PLAN`, `--apply PLAN`, and `--recover PLAN`; `--slug` is required. Targets use `--laravel-version X.Y[.Z]`; Git apply additionally requires `--commit FULL_SHA`. Test/readiness options and explicit database review are documented in that catalog. Use matching toolkit, adapter and image 1.4.0 or newer. Update keeps the behavior below.
+
 Only for projects originally deployed with `--repo`, with `.deploy-meta`, a running PHP service and no tracked local modifications. Pulls the recorded repository branch; this is not a new-app installer or database image upgrade.
 
 | Argument | Default | Behavior |
@@ -395,13 +400,13 @@ sudo bash /opt/laraship/list-projects.sh
 Install the published adapter in a venv or with pipx. Python requirement is 3.10+; there are no runtime package dependencies. The native toolkit/Docker image is installed or pulled separately.
 
 ```bash
-pipx install laraship==1.3.3
+pipx install laraship==1.4.0
 # Alternative, inside an activated virtual environment:
-python -m pip install laraship==1.3.3
+python -m pip install laraship==1.4.0
 
 laraship --version
-laraship install --backend native --version 1.3.3 --directory /opt/laraship
-laraship install --backend docker --version 1.3.3
+laraship install --backend native --version 1.4.0 --directory /opt/laraship
+laraship install --backend docker --version 1.4.0
 ```
 
 Creating `/opt/laraship` needs sufficient permissions; use `sudo` with the absolute installed CLI path when required, or select a new directory in an existing user-owned parent. Package installation itself does not deploy applications or install a host Docker daemon.
@@ -414,7 +419,7 @@ Creating `/opt/laraship` needs sufficient permissions; use `sudo` with the absol
 | Top-level `--version` | — | Show installed **Python package** version, not toolkit version. No top-level `-V` alias. |
 | `install -h`, `install --help` | — | Installation help. |
 | `install --backend native\|docker` | `native` | Download/extract a native toolkit release, or pull official CLI image. |
-| `install --version RELEASE` | Package release `1.3.3` | Exact raw release spelling such as `1.3.3` or `1.3.3-rc.1`, without leading `v`. Not `latest`, ranges or a Laravel version. |
+| `install --version RELEASE` | Package release `1.4.0` | Exact raw release spelling such as `1.4.0` or `1.4.0-rc.1`, without leading `v`. Not `latest`, ranges or a Laravel version. |
 | `install --directory PATH` | `/opt/laraship` | New native toolkit destination. Must be absolute, without `..` components, commas, NUL, CR or LF, no symlink components, existing parent and nonexistent destination. Ignored for Docker installation. |
 | `install --dry-run` | Off | Show installation/pull plan without network or writes. A native preview still validates destination constraints. |
 
@@ -422,31 +427,31 @@ Native download uses the GitHub release archive and matching SHA-256 file; extra
 
 ### Shared runner options
 
-These apply to each of `deploy`, `update`, `backup`, `activate`, `deactivate`, `remove`, `list`, `toolkit-version`:
+These apply to each of `deploy`, `update`, `backup`, `activate`, `deactivate`, `remove`, `list`, `toolkit-version`, plus `upgrade`:
 
 | Argument | Default | Behavior |
 |---|---|---|
 | `-h`, `--help` before `--` | — | Help for this adapter subcommand. For backend help, put it after `--`, only where supported. |
 | `--backend native\|docker` | `native` | Select execution backend. Does not install it automatically. |
 | `--directory PATH` | `/opt/laraship` | Installed native toolkit path. Ignored by Docker backend. |
-| `--image IMAGE` | `shellharbor/laraship:1.3.3` | Docker backend only. Exact release tag or lowercase SHA-256 digest. Mutable `latest` aliases are refused. Current parser accepts lowercase repository components/slashes; it does not support a registry-host port or arbitrary nonrelease tag. |
+| `--image IMAGE` | `shellharbor/laraship:1.4.0` | Docker backend only. Exact release tag or lowercase SHA-256 digest. Mutable `latest` aliases are refused. Current parser accepts lowercase repository components/slashes; it does not support a registry-host port or arbitrary nonrelease tag. |
 | `--archive-dir PATH` | `/var/backups/laraship` | Docker project-ZIP directory and identical host bind. Must be separate from protected server/runtime paths. Does not change native ZIP output; use `LARASHIP_ARCHIVE_DIR` for native. |
 | `--mount-readonly ABSOLUTE_PATH` | None; repeatable | Docker only: expose an existing host file/directory at that same absolute path, read-only. Refuses mounts hiding protected toolkit/server paths. Use for config, SSH key, hook/token or a local repository input. |
 | `--` | Separator | Everything after it belongs to the selected Bash command. Preserve token boundaries exactly. |
 
 `toolkit-version` accepts the shared adapter options but **no** backend arguments. Native execution uses Bash; Docker execution uses a temporary `docker run --rm --init` container. Stdin and exit status are preserved; a TTY is added only when both stdin/stdout are terminals.
 
-For isolated Docker inspection, put `--dry-run`, `--help`, `-h`, `--version`, `-V`, `--list-modules` or `--list-presets` **first** after `--` on `deploy`. `toolkit-version` is also isolated. Explicit read-only input mounts remain available. These run without networking/server-state mounts, with a read-only root and temporary `/tmp`. Python recognizes an exact backend `--help` for other commands too; use that only for `update` and `backup`, whose image/script help paths support it. Normal server operations require Linux/root and the local socket, and create missing host directories only after validation.
+For isolated Docker inspection, put `--dry-run`, `--help`, `-h`, `--version`, `-V`, `--list-modules` or `--list-presets` **first** after `--` on `deploy`. `toolkit-version` is also isolated. Explicit read-only input mounts remain available. These run without networking/server-state mounts, with a read-only root and temporary `/tmp`. Exact backend `--help` is supported for `update`, `backup` and `upgrade`; upgrade also supports isolated `-h`/`--version`. Upgrade planning itself needs the local Linux server, host network and identical read-only project/socket binds; it creates no directories. Its preparation/apply/recovery use writable administrative mounts. Normal server operations require Linux/root and the local socket, and create missing host directories only after validation.
 
 ```bash
 laraship deploy --backend native --directory /opt/laraship -- \
   --dry-run --slug shop --domain shop.example.com --db-type postgres --no-ssl
 
-laraship deploy --backend docker --image shellharbor/laraship:1.3.3 -- \
+laraship deploy --backend docker --image shellharbor/laraship:1.4.0 -- \
   --dry-run --slug shop --domain shop.example.com --db-type postgres --no-ssl
 
 LARASHIP_CLI="$(command -v laraship)"
-sudo "$LARASHIP_CLI" deploy --backend docker --image shellharbor/laraship:1.3.3 \
+sudo "$LARASHIP_CLI" deploy --backend docker --image shellharbor/laraship:1.4.0 \
   --mount-readonly /opt/laraship-input -- \
   --config /opt/laraship-input/shop.conf
 ```
@@ -455,18 +460,18 @@ The adapter currently has no Kubernetes subcommand. Use native `kubernetes.sh` o
 
 ## Run through a temporary Docker container
 
-The official image is the administrative CLI, not the Laravel application's web image. It connects to the host's already running Linux Docker Engine; deployed application containers are siblings managed by that daemon. No Docker-in-Docker or `--privileged` is needed. The published 1.3.3 image targets `linux/amd64`; do not promise native ARM availability.
+The official image is the administrative CLI, not the Laravel application's web image. It connects to the host's already running Linux Docker Engine; deployed application containers are siblings managed by that daemon. No Docker-in-Docker or `--privileged` is needed. The published 1.4.0 image targets `linux/amd64`; do not promise native ARM availability.
 
 ### Inspect without server access
 
 ```bash
-docker pull shellharbor/laraship:1.3.3
+docker pull shellharbor/laraship:1.4.0
 docker run --rm --init --network none --read-only --tmpfs /tmp \
-  shellharbor/laraship:1.3.3 --version
+  shellharbor/laraship:1.4.0 --version
 docker run --rm --init --network none --read-only --tmpfs /tmp \
-  shellharbor/laraship:1.3.3 deploy --help
+  shellharbor/laraship:1.4.0 deploy --help
 docker run --rm --init --network none --read-only --tmpfs /tmp \
-  shellharbor/laraship:1.3.3 deploy --dry-run \
+  shellharbor/laraship:1.4.0 deploy --dry-run \
   --slug shop --domain shop.example.com --db-type postgres --no-ssl
 ```
 
@@ -485,7 +490,7 @@ sudo docker run --rm --init -it --network host \
   --mount type=bind,src=/var/www,dst=/var/www \
   --mount type=bind,src=/run/lock/laraship,dst=/run/lock/laraship \
   --mount type=bind,src=/var/backups/laraship,dst=/var/backups/laraship \
-  shellharbor/laraship:1.3.3 deploy \
+  shellharbor/laraship:1.4.0 deploy \
   --slug shop --domain shop.example.com --db-type postgres \
   --ssl-email admin@example.com --with redis,queue,backup --create-backup
 ```
@@ -503,7 +508,7 @@ laraship_docker() {
     --mount type=bind,src=/var/www,dst=/var/www \
     --mount type=bind,src=/run/lock/laraship,dst=/run/lock/laraship \
     --mount type=bind,src=/var/backups/laraship,dst=/var/backups/laraship \
-    shellharbor/laraship:1.3.3 "$@"
+    shellharbor/laraship:1.4.0 "$@"
 }
 laraship_docker list
 laraship_docker backup --slug shop now
@@ -520,7 +525,7 @@ sudo docker run --rm --init -it --network host \
   --mount type=bind,src=/run/lock/laraship,dst=/run/lock/laraship \
   --mount type=bind,src=/var/backups/laraship,dst=/var/backups/laraship \
   --mount type=bind,src=/opt/laraship-input,dst=/opt/laraship-input,readonly \
-  shellharbor/laraship:1.3.3 deploy --config /opt/laraship-input/shop.conf \
+  shellharbor/laraship:1.4.0 deploy --config /opt/laraship-input/shop.conf \
   --on-complete /opt/laraship-input/notify.sh \
   --completion-endpoint https://control.example.com/api/deployments \
   --completion-token-file /opt/laraship-input/api-token
@@ -539,7 +544,7 @@ Prepare the same four host paths as above, plus the root-owned input directory c
 ```yaml
 services:
   laraship:
-    image: shellharbor/laraship:1.3.3
+    image: shellharbor/laraship:1.4.0
     profiles: [tools]
     user: "0:0"
     init: true
@@ -607,7 +612,7 @@ This administrative Compose runner deliberately uses root, host networking and a
 
 ## Kubernetes adapter and every argument
 
-Native: `bash /opt/laraship/kubernetes.sh render|deploy OPTIONS`. Docker: `shellharbor/laraship:1.3.3 kubernetes render|deploy OPTIONS`. The CLI image itself is not the application image passed to `--image`; build the existing Laravel app with the [application-image template](../kubernetes/application/Dockerfile) and follow the [Kubernetes guide](KUBERNETES.md).
+Native: `bash /opt/laraship/kubernetes.sh render|deploy OPTIONS`. Docker: `shellharbor/laraship:1.4.0 kubernetes render|deploy OPTIONS`. The CLI image itself is not the application image passed to `--image`; build the existing Laravel app with the [application-image template](../kubernetes/application/Dockerfile) and follow the [Kubernetes guide](KUBERNETES.md).
 
 | Argument | Default | Contract |
 |---|---|---|
@@ -635,7 +640,7 @@ Generated resources are a migration Job, web Deployment, ClusterIP Service and w
 ```bash
 docker run --rm --init --user "$(id -u):$(id -g)" \
   --network none --read-only --tmpfs /tmp \
-  shellharbor/laraship:1.3.3 kubernetes render \
+  shellharbor/laraship:1.4.0 kubernetes render \
   --name shop --namespace shop --image registry.example.com/shop:1.0 \
   --configmap shop-config-v1 --secret shop-secret-v1 --revision release-1 \
   --replicas 2 --worker
@@ -648,7 +653,7 @@ docker run --rm --init --user "$(id -u):$(id -g)" \
   --read-only --tmpfs /tmp \
   --mount type=bind,src="$PWD/kubeconfig",dst=/config/kubeconfig,readonly \
   -e KUBECONFIG=/config/kubeconfig \
-  shellharbor/laraship:1.3.3 kubernetes deploy --context YOUR_CONTEXT \
+  shellharbor/laraship:1.4.0 kubernetes deploy --context YOUR_CONTEXT \
   --name shop --namespace shop --image registry.example.com/shop:1.0 \
   --configmap shop-config-v1 --secret shop-secret-v1 --revision release-1 \
   --replicas 2 --worker

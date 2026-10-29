@@ -31,13 +31,13 @@ Keep the token in Secrets. The namespace in `DOCKERHUB_IMAGE` can differ from th
 
 The existing [Release workflow](../.github/workflows/release.yml) publishes the CLI image after GitHub release publication succeeds, including the exact-commit CI gate and VERSION/CHANGELOG checks. It checks out the verified commit by SHA, builds the root Dockerfile for `linux/amd64`, and checks version, help, deployment dry run and non-root Kubernetes rendering before login and push. The Docker Hub token is passed only to credential validation and the registry login action. This publishes the administrative CLI; application images and Compose PHP images have their own build contexts.
 
-Commit `VERSION=1.3.3` and the matching CHANGELOG section before creating `v1.3.3`. Push the commit to main/master, wait for all required checks on its exact SHA, then tag and push that verified commit. See the [release preparation sequence](../README.md#github-actions). To publish an existing version, first put the updated workflow on the default branch, then open **Actions → Release → Run workflow**, select that branch and enter the existing tag. Its commit must pass the same CI gate, contain the CLI Dockerfile, and match VERSION and CHANGELOG. Manual publication uses the selected workflow's configuration validator and the requested release's source code.
+Commit `VERSION=1.4.0` and the matching CHANGELOG section before creating `v1.4.0`. Push the commit to main/master, wait for all required checks on its exact SHA, then tag and push that verified commit. See the [release preparation sequence](../README.md#github-actions). To publish an existing version, first put the updated workflow on the default branch, then open **Actions → Release → Run workflow**, select that branch and enter the existing tag. Its commit must pass the same CI gate, contain the CLI Dockerfile, and match VERSION and CHANGELOG. Manual publication uses the selected workflow's configuration validator and the requested release's source code.
 
-The image uses the full version without the leading `v`: `your-namespace/laraship:1.3.3`, or `your-namespace/laraship:1.3.3-rc.1` for a prerelease. The Actions job summary records the image digest:
+The image uses the full version without the leading `v`: `your-namespace/laraship:1.4.0`, or `your-namespace/laraship:1.4.0-rc.1` for a prerelease. The Actions job summary records the image digest:
 
 ```bash
-docker pull your-namespace/laraship:1.3.3
-docker run --rm your-namespace/laraship:1.3.3 --version
+docker pull your-namespace/laraship:1.4.0
+docker run --rm your-namespace/laraship:1.4.0 --version
 ```
 
 Use the reported `your-namespace/laraship@sha256:...` reference for reproducible deployment: a rerun can rebuild a version tag from changing base packages. Substitute that reference for `laraship:local` in the examples below. Publishing is performed inside Release rather than a second release-event workflow, because [events created by GITHUB_TOKEN generally do not trigger another workflow](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow). A Docker Hub failure leaves the existing GitHub release intact; rerun Release after correcting the registry configuration.
@@ -85,6 +85,10 @@ Identical paths matter: bind mounts are resolved on the daemon's host, and nativ
 `--create-backup` publishes its private ZIP under `/var/backups/laraship` in container mode. To change that location, set `LARASHIP_ARCHIVE_DIR` and bind the host directory at the identical container path. Native Bash keeps `/tmp` by default. Both runners preserve private staging, exclusive publication and file mode 600. Native database provisioning and deletion require the native Bash runner: container deployment refuses `--db-native`, including settings from a config file. Removing an existing native-DB project is also refused before routing or data changes.
 
 Mount `--config` and `--deploy-key` files read-only at explicit paths when using them. Do not bake credentials into the image. Help, version, deploy dry run and module/preset listings do not require server mounts; `update --help` and `backup --help` are also supported without them. Certificate presence is checked through a read-only helper using `busybox:1.37.0` already on the daemon; `list` does not pull it automatically and reports `UNKNOWN` if that helper image is unavailable.
+
+## Managed application upgrades
+
+Release 1.4.0 adds `upgrade` / `upgrade.sh` dispatch to `shellharbor/laraship:1.4.0`. Preparation, verification, application and recovery use the standard writable server mounts above. Planning alone requires identical **read-only** `/var/www` and `/var/run/docker.sock` binds, host networking and temporary space; no lock/archive mount is required. Static `upgrade --help`/`--version` need no mounts. See [supported versions, private staging, every argument and complete examples](UPGRADE.md). The read-only socket mount does not restrict Docker API capabilities; trust the administrative image. Existing Kubernetes application images and workflows remain separate.
 
 ## Kubernetes from the same CLI
 
