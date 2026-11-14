@@ -95,6 +95,10 @@ disable_site_conf() {
 
 # ==================== Commenting out in docker-compose.yml ====
 comment_in_docker_compose() {
+    if proxy_uses_model; then
+        proxy_config_update disable || error "Cannot disable the project's proxy connections"
+        return
+    fi
     local COMPOSE_FILE="${PROXY_DIR}/docker-compose.yml"
     
     if [[ ! -f "$COMPOSE_FILE" ]]; then

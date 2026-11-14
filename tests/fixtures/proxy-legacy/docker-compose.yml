@@ -1,0 +1,28 @@
+# cd /var/www/nginxproxy && docker compose up -d && docker restart nginxproxy
+x-common-networks: &common-networks
+  networks:
+    - app
+services:
+  nginxproxy:
+    container_name: nginxproxy
+    restart: always
+    build:
+      context: .
+      dockerfile: nginx.Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+
+      - app_ssl_certificates:/etc/letsencrypt/app
+
+      #- ../../data/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem:ro
+    <<: *common-networks
+networks:
+  app:
+    external: true
+volumes:
+  app_ssl_certificates:
+    name: app_ssl_certificates
+    external: true

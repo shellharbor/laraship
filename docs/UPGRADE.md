@@ -2,7 +2,7 @@
 
 `upgrade.sh` plans, prepares, applies and recovers a reviewed application upgrade. Existing `update.sh` still pulls the deployment branch and installs committed dependencies. Use `upgrade` when changing Laravel, compatible PHP or Filament requirements.
 
-**Available in 1.4.0:** use matching toolkit, Python adapter or `shellharbor/laraship:1.4.0`. Earlier releases predate this command. A new Python adapter alone does not replace an old native toolkit or image. Keep the same toolkit revision throughout an operation.
+**Available since 1.4.0:** use matching toolkit, Python adapter or `shellharbor/laraship:1.4.1`. Earlier releases predate this command. A new Python adapter alone does not replace an old native toolkit or image. Keep the same toolkit revision throughout an operation.
 
 ## Supported matrix
 
@@ -106,7 +106,7 @@ Modes are mutually exclusive. Exit codes: 0 success, 1 operation/validation fail
 
 ## Python and Docker
 
-Install `laraship==1.4.0` with pip/pipx; native `--directory` must select the matching toolkit on the server:
+Install `laraship==1.4.1` with pip/pipx; native `--directory` must select the matching toolkit on the server:
 
 ```bash
 sudo /absolute/path/to/laraship upgrade --directory /opt/laraship -- --slug shop --json
@@ -114,16 +114,16 @@ sudo /absolute/path/to/laraship upgrade --directory /opt/laraship -- --slug shop
 sudo /absolute/path/to/laraship upgrade --directory /opt/laraship -- --slug shop --apply "$PLAN"
 ```
 
-Pull the administrative CLI image (or build the reviewed 1.4.0 checkout locally):
+Pull the administrative CLI image (or build the reviewed 1.4.1 checkout locally):
 
 ```bash
-docker pull shellharbor/laraship:1.4.0
-# Source-build alternative: docker build -t shellharbor/laraship:1.4.0 .
+docker pull shellharbor/laraship:1.4.1
+# Source-build alternative: docker build -t shellharbor/laraship:1.4.1 .
 # Read-only plan needs no writable project, lock or archive mounts.
 docker run --rm --network host --read-only --tmpfs /tmp \
   --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock,readonly \
   --mount type=bind,src=/var/www,dst=/var/www,readonly \
-  shellharbor/laraship:1.4.0 upgrade --slug shop --json
+  shellharbor/laraship:1.4.1 upgrade --slug shop --json
 
 # Preparation/apply/recovery use standard administrative mounts.
 docker run --rm -i --network host \
@@ -131,9 +131,9 @@ docker run --rm -i --network host \
   --mount type=bind,src=/var/www,dst=/var/www \
   --mount type=bind,src=/run/lock/laraship,dst=/run/lock/laraship \
   --mount type=bind,src=/var/backups/laraship,dst=/var/backups/laraship \
-  shellharbor/laraship:1.4.0 upgrade --slug shop --prepare
+  shellharbor/laraship:1.4.1 upgrade --slug shop --prepare
 
-sudo /absolute/path/to/laraship upgrade --backend docker --image shellharbor/laraship:1.4.0 -- --slug shop --json
+sudo /absolute/path/to/laraship upgrade --backend docker --image shellharbor/laraship:1.4.1 -- --slug shop --json
 ```
 
 Create writable lock/archive directories as in [CONTAINERS.md](CONTAINERS.md) before mutating operations. A read-only socket mount does not restrict the Docker API: trust this administrative image. The engine's plan uses inspection only. This workflow targets Compose; Kubernetes retains its separate immutable-image/migration/rollout process. Shared PHP images remain portable, non-root and externally configured.

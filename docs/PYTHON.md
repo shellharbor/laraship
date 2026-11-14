@@ -2,22 +2,22 @@
 
 Install and run LaraShip through its native Bash toolkit or published Docker CLI image. The Python package uses Python 3.10+ and has no runtime Python dependencies. It preserves the existing deployment, locking, backup and recovery behavior by calling the existing tools.
 
-Release 1.4.0 also exposes `laraship upgrade` for [managed Laravel/PHP/Filament upgrades](https://github.com/shellharbor/laraship/blob/main/docs/UPGRADE.md). Select a matching native toolkit with `--directory` or image `shellharbor/laraship:1.4.0`; older toolkits/images do not contain the backend command. Backend arguments follow `--`. Read-only Docker planning binds projects/socket read-only without creating lock/archive directories; preparation/apply/recovery use standard administrative mounts.
+Release 1.4.0 also exposes `laraship upgrade` for [managed Laravel/PHP/Filament upgrades](https://github.com/shellharbor/laraship/blob/main/docs/UPGRADE.md). Select a matching native toolkit with `--directory` or image `shellharbor/laraship:1.4.1`; older toolkits/images do not contain the backend command. Backend arguments follow `--`. Read-only Docker planning binds projects/socket read-only without creating lock/archive directories; preparation/apply/recovery use standard administrative mounts.
 
 The [runtime security policy](https://github.com/shellharbor/laraship/blob/main/docs/SECURITY_POLICY.md) introduced in 1.3.3 is enforced by the shared toolkit/image, not by pip installation. Use toolkit/image 1.3.3 or newer, or a reviewed checkout containing the policy with `--directory`. Older downloaded toolkits and published images retain their original behavior; upgrading the Python adapter alone does not patch them or existing application PHP images.
 
 The package does not install Docker, deploy an application or modify a server during `pip install`. Those operations require explicit CLI commands. Native deployments target Ubuntu 20.04+; Docker server operations target the same Linux server and its local Docker Engine. Package help and installation previews are available without root. This package does not make server deployment work directly on Windows or macOS; connect to the server over SSH.
 
-The [complete CLI reference for 1.4.0](https://github.com/shellharbor/laraship/blob/v1.4.0/docs/CLI_REFERENCE.md) covers backend arguments, config keys, validation, presets, completion payloads and temporary Docker/Compose execution.
+The [complete CLI reference for 1.4.1](https://github.com/shellharbor/laraship/blob/v1.4.1/docs/CLI_REFERENCE.md) covers backend arguments, config keys, validation, presets, completion payloads and temporary Docker/Compose execution.
 
 ## Install with pip or pipx
 
-Python packaging was introduced in 1.3.0. The commands below target release 1.4.0; a reviewed source checkout can also be installed with `pipx install .` or `python -m pip install .` inside a virtual environment. Older tags, including v1.2.2, predate Python packaging and must not be moved to publish it.
+Python packaging was introduced in 1.3.0. The commands below target release 1.4.1; a reviewed source checkout can also be installed with `pipx install .` or `python -m pip install .` inside a virtual environment. Older tags, including v1.2.2, predate Python packaging and must not be moved to publish it.
 
 For an isolated command available on PATH, use pipx:
 
 ```bash
-pipx install laraship==1.4.0
+pipx install laraship==1.4.1
 laraship --version
 laraship --help
 ```
@@ -26,7 +26,7 @@ Alternatively, use pip in a virtual environment:
 
 ```bash
 python3 -m venv "$HOME/.venvs/laraship"
-"$HOME/.venvs/laraship/bin/python" -m pip install laraship==1.4.0
+"$HOME/.venvs/laraship/bin/python" -m pip install laraship==1.4.1
 "$HOME/.venvs/laraship/bin/laraship" --help
 ```
 
@@ -37,11 +37,11 @@ Install the distribution-provided Python/venv or pipx packages first if these to
 Install downloads the exact GitHub release archive and SHA-256 file over HTTPS, validates the checksum and archive members, checks the embedded VERSION, then copies the complete toolkit into a new directory. Existing files, directories and symlink paths are refused. Downloads use private temporary files with size/time limits. Archive traversal, links, devices, duplicate entries and excessive expansion are rejected.
 
 ```bash
-laraship install --backend native --version 1.4.0 --dry-run
+laraship install --backend native --version 1.4.1 --dry-run
 
 # Use the absolute executable path because sudo may not include pipx in PATH.
 LARASHIP_CLI="$(command -v laraship)"
-sudo "$LARASHIP_CLI" install --backend native --version 1.4.0
+sudo "$LARASHIP_CLI" install --backend native --version 1.4.1
 laraship toolkit-version
 
 sudo "$LARASHIP_CLI" deploy --backend native -- \
@@ -58,15 +58,15 @@ The native toolkit retains its existing prerequisites and ability to install Doc
 Install Docker Engine and Compose v2 on the server and start the daemon first. This backend does not install a host daemon or run Docker-in-Docker.
 
 ```bash
-laraship install --backend docker --version 1.4.0
-laraship toolkit-version --backend docker --image shellharbor/laraship:1.4.0
+laraship install --backend docker --version 1.4.1
+laraship toolkit-version --backend docker --image shellharbor/laraship:1.4.1
 
 # Informational flags go first after --; no server mounts are needed.
-laraship deploy --backend docker --image shellharbor/laraship:1.4.0 -- \
+laraship deploy --backend docker --image shellharbor/laraship:1.4.1 -- \
   --dry-run --domain shop.example.com --db-type postgres --no-ssl
 
 LARASHIP_CLI="$(command -v laraship)"
-sudo "$LARASHIP_CLI" deploy --backend docker --image shellharbor/laraship:1.4.0 -- \
+sudo "$LARASHIP_CLI" deploy --backend docker --image shellharbor/laraship:1.4.1 -- \
   --slug shop --domain shop.example.com --db-type postgres \
   --ssl-email admin@example.com
 ```
@@ -78,7 +78,7 @@ Server operations require root, the local `/var/run/docker.sock`, host networkin
 Expose configuration files, SSH keys or other host inputs explicitly with repeatable `--mount-readonly /absolute/path`. The path is mounted at the same absolute location. Mounts that hide the packaged CLI or required server paths are refused:
 
 ```bash
-sudo "$LARASHIP_CLI" deploy --backend docker --image shellharbor/laraship:1.4.0 \
+sudo "$LARASHIP_CLI" deploy --backend docker --image shellharbor/laraship:1.4.1 \
   --mount-readonly /root/laraship-input -- \
   --config /root/laraship-input/shop.conf
 ```

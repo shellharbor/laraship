@@ -54,6 +54,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  e2e-proxy-legacy:
+    name: Existing custom shared proxy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install bats and free fixture ports
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bats
+          sudo systemctl stop apache2 nginx 2>/dev/null || true
+      - name: Check legacy HTTP/TLS, custom topology, adoption and recovery
+        env:
+          E2E_ALLOW: "1"
+        run: sudo -E bats --print-output-on-failure tests/e2e-proxy-legacy.bats
+
   e2e-upgrade:
     name: Managed upgrade (${{ matrix.name }})
     runs-on: ubuntu-24.04
@@ -90,7 +106,7 @@ jobs:
           done
       - name: Build the actual Docker CLI adapter
         if: matrix.db == 'mysql'
-        run: docker build -t laraship-upgrade-test:1.4.0 .
+        run: docker build -t laraship-upgrade-test:1.4.1 .
       - name: Check private output transport and interrupted command cleanup
         env:
           E2E_ALLOW: "1"
@@ -106,7 +122,7 @@ jobs:
           flags=()
           if [ -n "$UPGRADE_FILAMENT" ]; then flags+=(--filament "$UPGRADE_FILAMENT"); fi
           if [ -n "$UPGRADE_REPOSITORY" ]; then flags+=(--repository); fi
-          if [ "$UPGRADE_DB" = mysql ]; then flags+=(--cli-image laraship-upgrade-test:1.4.0); fi
+          if [ "$UPGRADE_DB" = mysql ]; then flags+=(--cli-image laraship-upgrade-test:1.4.1); fi
           sudo -E python3 -B tests/upgrade-e2e.py --db "$UPGRADE_DB" --source-php "$UPGRADE_SOURCE_PHP" "${flags[@]}"
 
   php-images:

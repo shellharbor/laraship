@@ -113,6 +113,10 @@ enable_site_conf() {
 
 # ==================== Uncommenting in docker-compose.yml ====
 uncomment_in_docker_compose() {
+    if proxy_uses_model; then
+        proxy_config_update enable || error "Cannot enable the project's proxy connections"
+        return
+    fi
     local COMPOSE_FILE="${PROXY_DIR}/docker-compose.yml"
     
     if [[ ! -f "$COMPOSE_FILE" ]]; then

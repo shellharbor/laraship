@@ -50,7 +50,14 @@ site_body() { curl --max-time 5 -fsS -H "Host: $1.test" http://127.0.0.1/; }
     [ "$(site_body proxya)" = proxya ]; [ "$(site_body proxyb)" = proxyb ]
 }
 @test "missing candidate network aborts without touching the other site" {
-    run bash -c 'source "$1"; broken() { sed -i s/name:\ proxya/name:\ missing_proxy_network/ "$PROXY_DIR/docker-compose.yml"; }; proxy_transaction broken' _ "$DEPLOY"
+    run bash -c 'source "$1"; broken() { python3 - "$PROXY_DIR/docker-compose.yml" <<PY
+import json,sys
+from pathlib import Path
+path=Path(sys.argv[1]); value=json.loads(path.read_text())
+value["networks"]["proxya"]["name"]="missing_proxy_network"
+path.write_text(json.dumps(value,indent=2)+"\n")
+PY
+    }; proxy_transaction broken' _ "$DEPLOY"
     [ "$status" != 0 ]; [ "$(site_body proxyb)" = proxyb ]
 }
 @test "a real apply failure restores configuration and both HTTP routes" {

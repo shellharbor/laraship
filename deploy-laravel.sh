@@ -663,8 +663,8 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./sites:/etc/nginx/sites:ro
     <<: *common-networks
-networks:
-volumes:
+networks: {}
+volumes: {}
 DCEOF
 
     info "nginxproxy initialized in ${PROXY_DIR}"
@@ -1304,12 +1304,6 @@ update_proxy_nginx_conf() {
         cp "$SOURCE_TEMPLATE" "$TEMPLATE"
     fi
 
-    # Check whether the sites folder is mounted in docker-compose.yml
-    if ! grep -q "./sites:/etc/nginx/sites:ro" "${PROXY_DIR}/docker-compose.yml"; then
-        info "Adding the sites folder mount to the nginxproxy docker-compose.yml..."
-        sed -i '/- \.\/nginx\.conf:\/etc\/nginx\/nginx\.conf:ro/a\      - ./sites:/etc/nginx/sites:ro' "${PROXY_DIR}/docker-compose.yml" || error "Cannot add proxy sites mount"
-    fi
-
     if [[ -f "$SITE_CONF" ]]; then
         warn "Config ${SITE_CONF} already exists, skipping."
         return
@@ -1325,132 +1319,7 @@ update_proxy_nginx_conf() {
 
 # ==================== Update nginxproxy/docker-compose.yml
 update_proxy_docker_compose() {
-    local DC="${PROXY_DIR}/docker-compose.yml"
-
-    # Check whether this slug is already in the networks section
-    if grep -q "^  ${SLUG}:$" "$DC"; then
-        info "Network ${SLUG} is already added to ${DC}"
-        return
-    fi
-
-    info "Adding ${SLUG} to ${DC}..."
-
-    python3 - "$DC" "$SLUG" <<'PYEOF' || error "Failed to edit configuration"
-import sys
-import re
-
-def in_service(lines, idx, name):
-    """Line idx is inside service name: the nearest key above with indent 2 is name"""
-    for j in range(idx - 1, -1, -1):
-        m = re.match(r'^  ([\w.-]+):', lines[j])
-        if m:
-            return m.group(1) == name
-        if re.match(r'^[^\s#]', lines[j]):
-            return False
-    return False
-
-dc_path = sys.argv[1]
-slug = sys.argv[2]
-
-with open(dc_path) as f:
-    content = f.read()
-
-lines = content.splitlines()
-result = []
-i = 0
-
-# Collect existing keys to check for duplicates
-existing_networks = set()
-existing_volumes = set()
-existing_network_refs = set()
-existing_volume_mounts = set()
-
-for line in lines:
-    # Networks in x-common-networks
-    match = re.match(r'^\s+-\s+([\w-]+)$', line)
-    if match:
-        existing_network_refs.add(match.group(1))
-    # Top-level networks
-    match = re.match(r'^\s{2}([\w-]+):\s*$', line)
-    if match:
-        existing_networks.add(match.group(1))
-    # Top-level volumes
-    match = re.match(r'^\s{2}([\w-]+_ssl_certificates):\s*$', line)
-    if match:
-        existing_volumes.add(match.group(1))
-    # Volume mounts in the service
-    match = re.match(r'^\s+-\s+([\w-]+_ssl_certificates):/etc/letsencrypt/', line)
-    if match:
-        existing_volume_mounts.add(match.group(1))
-
-while i < len(lines):
-    line = lines[i]
-
-    # --- x-common-networks: add the network to the list ---
-    if line.strip().startswith("networks:") and i > 0 and "x-common-networks" in lines[i-1]:
-        if line.strip() == "networks: []":
-            # Replace the inline syntax with a multi-line one containing the new network
-            result.append("  networks:")
-            if slug not in existing_network_refs:
-                result.append(f"    - {slug}")
-            i += 1
-        else:
-            result.append(line)
-            i += 1
-            while i < len(lines) and lines[i].strip().startswith("-"):
-                result.append(lines[i])
-                i += 1
-            if slug not in existing_network_refs:
-                result.append(f"    - {slug}")
-        continue
-
-    # --- volumes: in the nginxproxy service — add the ssl volume ---
-    if re.match(r'^\s+volumes:\s*$', line) and in_service(lines, i, "nginxproxy"):
-        result.append(line)
-        i += 1
-        while i < len(lines) and lines[i].strip().startswith("-"):
-            result.append(lines[i])
-            i += 1
-        volume_key = f"{slug}_ssl_certificates"
-        if volume_key not in existing_volume_mounts:
-            result.append(f"      - {volume_key}:/etc/letsencrypt/{slug}")
-        continue
-
-    # --- networks: top level ---
-    if re.match(r'^networks:\s*(\{\})?$', line):
-        result.append("networks:")
-        i += 1
-        while i < len(lines) and lines[i].startswith('  ') and not re.match(r'^[a-z]', lines[i]):
-            result.append(lines[i])
-            i += 1
-        if slug not in existing_networks:
-            result.append(f"  {slug}:")
-            result.append(f"    name: {slug}")
-            result.append(f"    external: true")
-        continue
-
-    # --- volumes: top level ---
-    if re.match(r'^volumes:\s*(\{\})?$', line):
-        result.append("volumes:")
-        i += 1
-        while i < len(lines) and lines[i].startswith('  ') and not re.match(r'^[a-z]', lines[i]):
-            result.append(lines[i])
-            i += 1
-        volume_key = f"{slug}_ssl_certificates"
-        if volume_key not in existing_volumes:
-            result.append(f"  {volume_key}:")
-            result.append(f"    name: {volume_key}")
-            result.append(f"    external: true")
-        continue
-
-    result.append(line)
-    i += 1
-
-with open(dc_path, 'w') as f:
-    f.write("\n".join(result) + "\n")
-PYEOF
-
-    info "${SLUG} added to the proxy docker-compose.yml"
+    proxy_config_update register || error "Cannot adapt the existing shared proxy; live configuration unchanged"
 }
 
 # ==================== Commenting / uncommenting SSL blocks ==============

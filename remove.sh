@@ -133,6 +133,10 @@ remove_from_nginx_conf() {
 
 # ==================== Removing from docker-compose.yml ====
 remove_from_docker_compose() {
+    if proxy_uses_model; then
+        proxy_config_update remove || error "Cannot remove the project's proxy connections"
+        return
+    fi
     local COMPOSE_FILE="${PROXY_DIR}/docker-compose.yml"
     
     if [[ ! -f "$COMPOSE_FILE" ]]; then

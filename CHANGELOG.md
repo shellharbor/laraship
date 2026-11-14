@@ -28,6 +28,25 @@ After every task with file changes, briefly record what changed and why: feature
 - 2026-10-04: translated all AI-KIT documents, adapters, rules, templates, and the bootstrap prompt into English; established English as the language for future kit updates.
 - 2026-10-04: extended the English language requirement to all authored project content and agent communication, including code, UI text, logs, Git messages, reviews, and reports, so future project work follows one language policy.
 
+## 1.4.1
+
+LaraShip 1.4.1 connects new projects to existing standalone shared Nginx proxies, including custom Compose builds with inline sites. Preserve the working runtime, routes and certificates, validate changes before applying them, and recover already-created applications without reinstalling their database.
+
+### Fixed
+
+- Adopt existing standalone shared proxies with inline Nginx routes instead of requiring a pre-existing LaraShip `sites/` directory. Use Compose's parser for custom YAML/anchors and long mount/network forms, preserve interpolation/env-file references and path semantics, and save private original backups before conversion to JSON-compatible YAML.
+- Preserve the existing Compose project owner and immutable custom proxy image during validation/apply/rollback. Keep unrelated networks, aliases, certificate mounts and service settings; refuse unrepresented or conflicting topology before live writes. Managed activation/deactivation/removal uses the same model adapter.
+- Apply/recover only the operation's file delta so a custom runtime's unrelated data/log updates and newly created files are retained. Refuse conflicting edits and exclusively claim a newly created shared-proxy path before writing it.
+- Refuse duplicate proxy hostnames even when Nginx reports only a warning; create valid empty mappings for fresh proxy templates. Add legacy HTTP/TLS/authentication/ACME/lifecycle and rollback tests, standard-proxy regressions and CI coverage.
+- Document recovery of an already-created project after proxy-registration failure, full-toolkit update requirements and the supported custom-proxy boundaries. Record the adoption architecture and refresh local project continuity guidance.
+
+### Upgrade notes
+
+- Update the complete native toolkit, Docker CLI image or Python adapter to 1.4.1; the Python adapter also needs a matching native toolkit/image. Updating a single Bash file is insufficient. Existing application PHP images and databases are not upgraded.
+- Supported custom proxies use the standalone Compose service/container `nginxproxy`, bridge networks and one explicit main Nginx HTTP block. Unsupported overrides, runtime-only topology or conflicting resources abort before live changes. See [supported layouts and recovery](docs/SHARED_PROXY.md).
+- First conversion saves private originals under `/var/www/.laraship-proxy-backups/`. Compose is normalized to JSON-compatible YAML, so comments and anchors remain in the backup. Network/mount changes can briefly recreate the proxy container.
+- If deployment already created the application but failed at proxy registration, use the documented recovery procedure; do not delete or reinstall the project.
+
 ## 1.4.0
 
 LaraShip 1.4.0 adds managed Laravel, PHP and Filament upgrades through the same native Bash, Docker and Python interfaces. Prepare and test changes separately, review the candidate, then apply it after a validated database backup.
